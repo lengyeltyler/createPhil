@@ -1,0 +1,94 @@
+
+:root{
+  --bg: #0d0f14;
+  --card: #131723;
+  --text: #e6e9f2;
+  --muted:#9aa4b2;
+  --accent:#6dd3ff;
+  --border: #1f2635;
+}
+
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, 'Apple Color Emoji','Segoe UI Emoji';
+  color:var(--text);
+  background:
+    radial-gradient(1200px 600px at 20% -10%, #1c2340 0%, transparent 60%),
+    radial-gradient(800px 400px at 110% 10%, #0b364b 0%, transparent 60%),
+    var(--bg);
+}
+
+.app-header{
+  padding:24px;
+  text-align:center;
+}
+.app-header h1{
+  margin:0 0 6px 0;
+  font-size:28px;
+  letter-spacing:.5px;
+}
+.app-header .sub{
+  margin:0;
+  color:var(--muted);
+}
+
+.layout{
+  display:grid;
+  grid-template-columns: 340px 1fr;
+  gap:18px;
+  padding:18px;
+  max-width:1200px;
+  margin:0 auto 48px;
+}
+
+.controls{
+  background:linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
+  border:1px solid var(--border);
+  border-radius:16px;
+  padding:16px;
+  backdrop-filter: blur(6px);
+}
+
+.controls h2{margin:4px 0 12px 0; font-size:16px; letter-spacing:.3px}
+.layer-list{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px 14px;
+  margin-bottom:16px;
+}
+.layer-list label{display:flex; gap:8px; align-items:center; color:var(--text)}
+
+.buttons{display:flex; gap:8px; margin-bottom:14px}
+button{
+  appearance:none; border:1px solid var(--border); background:var(--card);
+  color:var(--text); padding:8px 12px; border-radius:12px; cursor:pointer;
+}
+button.primary{ background:linear-gradient(180deg, #2a7ab3, #215983); border-color:#1a4e71 }
+button.secondary{ background:#182233 }
+button.ghost{ background:transparent }
+button[disabled]{ opacity:.5; cursor:not-allowed }
+
+.notes{ color:var(--muted); font-size:13px }
+.notes summary{ cursor:pointer; color:var(--text) }
+.notes code{ color:#a7e2ff }
+
+.log{
+  margin-top:12px; background:#0b0f18; border:1px dashed var(--border);
+  min-height:80px; padding:10px; border-radius:12px; color:#a7b3c9; overflow:auto;
+}
+
+.preview{
+  display:flex; align-items:center; justify-content:center;
+}
+.stage{
+  width:420px; height:420px;
+  border-radius:18px;
+  background: #0a0d14;
+  border:1px solid var(--border);
+  display:flex; align-items:center; justify-content:center;
+  overflow:hidden;
+  box-shadow: 0 6px 30px rgba(0,0,0,.35);
+}
+.stage svg{ display:block; width:420px; height:420px }

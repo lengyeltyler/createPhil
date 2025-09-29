@@ -1,0 +1,17 @@
+# Node / tooling
+node_modules/
+dist/
+.build/
+.cache/
+.DS_Store
+.env
+.env.*
+# logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-lock.yaml
+# OS/editor
+Thumbs.db
+.idea/
+.vscode/

@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>createPhil — Trait Playground</title>
+  <meta name="description" content="Generate Phil traits, layer them, and save as SVG." />
+  <link rel="stylesheet" href="./styles.css" />
+  <!-- ClipperLib (global) for traits that expect it -->
+  <script defer src="https://unpkg.com/clipper-lib@6.4.2/clipper.js"></script>
+</head>
+<body>
+  <header class="app-header">
+    <h1>createPhil</h1>
+    <p class="sub">Play with traits & build your own Phil. 420×420 SVG.</p>
+  </header>
+
+  <main class="layout">
+    <section class="controls">
+      <h2>Layers</h2>
+      <form id="layerForm" class="layer-list">
+        <label><input type="checkbox" name="layer" value="bg" checked> Background</label>
+        <label><input type="checkbox" name="layer" value="phil" checked> Phil</label>
+        <label><input type="checkbox" name="layer" value="spikes"> Spikes</label>
+        <label><input type="checkbox" name="layer" value="wings"> Wings</label>
+        <label><input type="checkbox" name="layer" value="eyes" checked> Eyes</label>
+        <label><input type="checkbox" name="layer" value="nose" checked> Nose</label>
+        <label><input type="checkbox" name="layer" value="teeth" checked> Teeth</label>
+        <label><input type="checkbox" name="layer" value="top"> Top</label>
+      </form>
+
+      <div class="buttons">
+        <button id="generateBtn" class="primary">Generate</button>
+        <button id="saveBtn" class="secondary" disabled>Save SVG</button>
+        <button id="clearBtn" class="ghost">Clear</button>
+      </div>
+
+      <details class="notes">
+        <summary>Notes</summary>
+        <ul>
+          <li>Your trait scripts & JSON go in <code>/traits</code> and <code>/traits_json</code>.</li>
+          <li>No changes to trait code needed; styles remain exactly the same.</li>
+          <li>We use a Service Worker to remap <code>/traits_json</code> paths when hosted under a subpath.</li>
+        </ul>
+      </details>
+
+      <pre id="log" class="log"></pre>
+    </section>
+
+    <section class="preview">
+      <div id="stage" class="stage" aria-label="SVG preview area"></div>
+    </section>
+  </main>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

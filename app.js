@@ -5,12 +5,26 @@
 // - Optional Service Worker keeps /traits_json fetches working under subpaths.
 
 const W = 420, H = 420;
-const logEl  = document.getElementById('log');
-const stage  = document.getElementById('stage');
-const form   = document.getElementById('layerForm');
-const genBtn = document.getElementById('generateBtn');
-const saveBtn= document.getElementById('saveBtn');
-const clearBtn=document.getElementById('clearBtn');
+const logEl   = document.getElementById('log');
+const stage   = document.getElementById('stage');
+const form    = document.getElementById('layerForm');
+const genBtn  = document.getElementById('generateBtn');
+const saveBtn = document.getElementById('saveBtn');
+const clearBtn= document.getElementById('clearBtn');
+
+// --- NEW: create (or find) a PNG export button programmatically ---
+let savePngBtn = document.getElementById('savePngBtn');
+(function ensurePngButton(){
+  if (!savePngBtn) {
+    savePngBtn = document.createElement('button');
+    savePngBtn.id = 'savePngBtn';
+    savePngBtn.type = 'button';
+    savePngBtn.textContent = 'Export PNG';
+    savePngBtn.style.marginLeft = '8px';
+    const toolbar = (saveBtn && saveBtn.parentElement) || document.body;
+    toolbar.appendChild(savePngBtn);
+  }
+})();
 
 // Register service worker (optional but recommended for subpath-safe JSON fetch)
 if ('serviceWorker' in navigator) {
@@ -76,6 +90,7 @@ async function generate() {
   clearLog();
   if (genBtn) genBtn.disabled = true;
   if (saveBtn) saveBtn.disabled = true;
+  if (savePngBtn) savePngBtn.disabled = true;
   if (stage) stage.innerHTML = '<div class="spinner">Generating…</div>';
 
   // 1) selection as a set
@@ -118,6 +133,7 @@ async function generate() {
   lastSVG = compose(hrefs);
   if (stage) stage.innerHTML = lastSVG;
   if (saveBtn) saveBtn.disabled = false;
+  if (savePngBtn) savePngBtn.disabled = false;
   if (genBtn) genBtn.disabled = false;
 }
 
@@ -131,13 +147,64 @@ function save() {
   setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 0);
 }
 
+// --- NEW: High-res PNG export ---
+// Default target is 3300x3300 px (crisp on US Letter/A4 when set to "Fit to page" in print dialogs).
+async function savePNG(targetPx) {
+  if (!lastSVG) return;
+  const DEFAULT_SIZE = 3300; // ~11" at 300dpi; square to maximize printable area
+  const size = Number.isFinite(targetPx) && targetPx > 0 ? Math.floor(targetPx) : DEFAULT_SIZE;
+
+  // Ensure <svg> string has explicit viewBox (we already set that in compose)
+  const svgStr = lastSVG;
+
+  // Make an <img> from the SVG string
+  const img = new Image();
+  img.decoding = 'async';
+  img.loading = 'eager';
+  img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgStr)));
+
+  await img.decode().catch(() => new Promise(res => { img.onload = res; }));
+
+  // Draw to a high-res square canvas
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+
+  const ctx = canvas.getContext('2d', { willReadFrequently: false });
+  // scale the square 420x420 to the target square
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+  // Download as PNG
+  const link = document.createElement('a');
+  link.download = 'phil.png';
+  link.href = canvas.toDataURL('image/png'); // lossless
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
+
 function clearStage(){
   lastSVG = '';
   if (stage) stage.innerHTML = '';
   if (saveBtn) saveBtn.disabled = true;
+  if (savePngBtn) savePngBtn.disabled = true;
   clearLog();
 }
 
 genBtn?.addEventListener('click', generate);
 saveBtn?.addEventListener('click', save);
 clearBtn?.addEventListener('click', clearStage);
+
+// --- NEW: hook up PNG export ---
+// Click = quick export at 3300px; Shift+Click prompts custom size.
+savePngBtn?.addEventListener('click', (e) => {
+  if (e.shiftKey) {
+    const val = prompt('Export PNG size in pixels (square):', '3300');
+    const px = val ? parseInt(val, 10) : NaN;
+    savePNG(px);
+  } else {
+    savePNG(3300);
+  }
+});

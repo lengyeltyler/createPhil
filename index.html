@@ -6,7 +6,10 @@
   <title>createPhil</title>
   <meta name="theme-color" content="#000000">
   <style>
-    :root { --panel:#0b0b0b; --ink:#e5ffe9; --accent:#9bffb0; --line:#1b3b24; }
+    :root {
+      --panel:#0b0b0b; --ink:#e5ffe9; --accent:#9bffb0; --line:#1b3b24;
+      --thumb: 180px; /* 👈 smaller thumbnail size */
+    }
     *{box-sizing:border-box}
     html,body{height:100%}
     body{ margin:0;background:#000;color:#fff;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif; }
@@ -28,6 +31,19 @@
       display:flex; align-items:center; justify-content:center; overflow:hidden;
     }
     #stage svg{max-width:100%; height:auto; display:block}
+
+    /* Final Phil area */
+    #finalWrap { margin-top: 12px; }
+    #finalControls{ display:flex; gap:8px; margin-bottom:6px; }
+    #finalControls button{
+      background:#0f1a12; color:var(--ink); border:1px solid var(--line);
+      padding:6px 10px; border-radius:8px; cursor:pointer; font-weight:600; font-size:13px;
+    }
+    #finalPreview{
+      background:#050505; border:1px solid var(--line); border-radius:12px; padding:10px;
+      display:flex; align-items:center; justify-content:center; overflow:hidden; height:420px;
+    }
+
     aside{
       background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:10px; overflow:auto;
       display:flex; flex-direction:column; gap:10px;
@@ -42,10 +58,24 @@
     fieldset legend{color:#bfecc8; font-size:12px; padding:0 6px}
     .layers{display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:6px; font-size:13px}
     .layers label{display:flex; align-items:center; gap:6px; background:#0a0a0a; border:1px solid var(--line); border-radius:8px; padding:6px}
-    #previewGrid{ display:grid; grid-template-columns: repeat(2, 1fr); gap:8px; }
-    .thumb{ border:1px solid var(--line); border-radius:10px; padding:6px; background:#0a0a0a; }
-    .thumb img{width:100%; height:auto; display:block; border-radius:6px; background:#000}
+
+    /* Smaller thumbnails */
+    #previewGrid{
+      display:grid;
+      grid-template-columns: repeat(2, var(--thumb));
+      gap:8px;
+      justify-content:start;
+    }
+    .thumb{
+      border:1px solid var(--line); border-radius:10px; padding:6px; background:#0a0a0a;
+      width: var(--thumb);
+    }
+    .thumb img{
+      width: var(--thumb); height: var(--thumb);
+      display:block; border-radius:6px; background:#000; object-fit:contain;
+    }
     .thumb .meta{display:flex; justify-content:space-between; align-items:center; margin-top:6px; font-size:12px; color:#bfecc8}
+
     #log{
       margin:0; white-space:pre; font:12px/1.25 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
       color:#9bffb0; background:#06140b; border:1px dashed var(--line); padding:8px; border-radius:8px;
@@ -67,12 +97,14 @@
       <div id="stage" aria-live="polite"></div>
     </div>
 
+    <!-- Final Phil block (under the main stage, full width left column) -->
     <div id="finalWrap">
       <div class="aside-title"><h3>Final Phil Preview</h3></div>
-      <div id="finalPreview" aria-live="polite"
-          style="background:#050505; border:1px solid var(--line); border-radius:12px; padding:10px;
-                  display:flex; align-items:center; justify-content:center; overflow:hidden; height:420px;">
+      <div id="finalControls">
+        <button id="saveFinalBtn" type="button">Save Final Phil (SVG)</button>
+        <button id="resetFinalBtn" type="button">Reset Final Phil</button>
       </div>
+      <div id="finalPreview" aria-live="polite"></div>
     </div>
 
     <aside>
@@ -134,7 +166,7 @@
   <!-- App -->
   <script type="module" src="./app.js"></script>
 
-  <!-- Page wiring: per-trait generate/save and preview rendering -->
+  <!-- Page wiring: per-trait generate/save, thumbnails, and Final Phil -->
   <script>
     // Send commands into app.js (it listens for {source:'parent', kind:'generate'|'save', trait})
     function sendToApp(kind, trait){
@@ -186,7 +218,7 @@
           e.preventDefault();
           const a = document.createElement('a');
           a.href = url;
-          a.download = `phil-${trait}.svg`;   // fixed
+          a.download = `phil-${trait}.svg`;   <!-- template literal, no escapes -->
           document.body.appendChild(a);
           a.click();
           a.remove();
@@ -196,33 +228,53 @@
       card.querySelector('img').src = url;
     }
 
-const finalPreview = document.getElementById('finalPreview');
-const savedSvgs = {}; // cache saved trait svgs by id
+    // ---- Final Phil compose/save/reset ----
+    const finalPreview = document.getElementById('finalPreview');
+    const savedSvgs = {}; // cache saved trait svgs by id
 
-    function rebuildFinalPhil() {
+    function buildFinalPhilSVG(){
       const orderedIds = ['bg','wings','phil','spikes','eyes','nose','teeth','top'];
-      const hrefs = [];
+      const images = [];
       for (const id of orderedIds) {
         if (savedSvgs[id]) {
           const encoded = btoa(unescape(encodeURIComponent(savedSvgs[id])));
-          hrefs.push(`<image href="data:image/svg+xml;base64,${encoded}" x="0" y="0" width="420" height="420"/>`);
+          images.push(`<image href="data:image/svg+xml;base64,${encoded}" x="0" y="0" width="420" height="420"/>`);
         }
       }
-      if (hrefs.length) {
-        finalPreview.innerHTML =
-          `<svg xmlns="http://www.w3.org/2000/svg" width="420" height="420" viewBox="0 0 420 420">${hrefs.join('')}</svg>`;
-      } else {
-        finalPreview.innerHTML = '';
-      }
+      return `<svg xmlns="http://www.w3.org/2000/svg" width="420" height="420" viewBox="0 0 420 420">${images.join('')}</svg>`;
     }
+
+    function rebuildFinalPhil() {
+      const any = Object.keys(savedSvgs).length > 0;
+      finalPreview.innerHTML = any ? buildFinalPhilSVG() : '';
+    }
+
+    document.getElementById('saveFinalBtn').addEventListener('click', () => {
+      const any = Object.keys(savedSvgs).length > 0;
+      if (!any) return;
+      const svg = buildFinalPhilSVG();
+      const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
+      const url  = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'final-phil.svg';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 0);
+    });
+
+    document.getElementById('resetFinalBtn').addEventListener('click', () => {
+      for (const k in savedSvgs) delete savedSvgs[k];
+      finalPreview.innerHTML = '';
+    });
 
     // When receiving a per-trait svg, update the grid AND the final composite
     window.addEventListener('message', (e) => {
       const msg = e.data || {};
       if (msg && msg.source === 'createPhil' && msg.kind === 'preview-layer' && msg.trait && msg.svg) {
         upsertThumb(msg.trait, msg.svg);
-        savedSvgs[msg.trait] = msg.svg;   // cache
-        rebuildFinalPhil();               // update full preview
+        savedSvgs[msg.trait] = msg.svg;  // cache
+        rebuildFinalPhil();              // update full preview
       }
     });
   </script>

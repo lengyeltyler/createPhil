@@ -1,32 +1,27 @@
-// bgTrait.js — palette-based, random spiral type, defs/use reuse, crisp + smaller output
-// Drop-in replacement for your current file.
+// bgTrait.js — 13 palettes, random role-mapping per render, crisp output
 
-import { getSecureRandomNumber } from "../utils/colorUtils.js"; // keep your RNG
+import { getSecureRandomNumber } from "../utils/colorUtils.js";
 import { validateSVGSize } from "../utils/sizeValidation.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const WIDTH = 420, HEIGHT = 420;
 
-// ---------- utils ----------
-const R = (min, max) => min + getSecureRandomNumber() * (max - min);
+// ---------- rng & helpers ----------
+const R  = (min, max) => min + getSecureRandomNumber() * (max - min);
 const RI = (min, max) => Math.floor(R(min, max + 1));
-const pick = (arr) => arr[RI(0, arr.length - 1)];
 const round = (n, d = 1) => Number(n.toFixed(d));
+const pick  = (arr) => arr[RI(0, arr.length - 1)];
+function shuffle(arr){
+  // Fisher–Yates with our secure RNG
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(getSecureRandomNumber() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
 
-// ---------- harmonious palettes (hex) ----------
-const PALETTES = [
-  // Your example from coolors.co
-  { name: "coolors-1",
-    bg: "#FDFFFC", stars: "#41EAD4", dust: "#B91372", armA: "#FF0022", armB: "#B91372", core: "#011627" },
-  { name: "atelier",
-    bg: "#91C4F2", stars: "#8CA0D7", dust: "#9D79BC", armA: "#A14DA0", armB: "#7E1F86", core: "#e0e7ff" },
-  { name: "sunset-mint",
-    bg: "#20BF55", stars: "#0B4F6C", dust: "#01BAEF", armA: "#FBFBFF", armB: "#757575", core: "#fde68a" },
-];
-
-// For subtle variance within a role color
+// ---------- color utils ----------
 function tint(hex, amt = 0.0) {
-  // amt in [-0.2..0.2], small HSL lightness tweak to avoid flatness
   const { h, s, l } = rgbToHsl(hexToRgb(hex));
   const l2 = Math.max(0, Math.min(1, l + amt));
   return rgbToHex(hslToRgb({ h, s, l: l2 }));
@@ -74,88 +69,61 @@ function hslToRgb({h,s,l}) {
 
 // ---------- spiral math ----------
 function logSpiralPoint(cx, cy, a, b, theta) {
-  // r = a * e^(bθ)
   const r = a * Math.exp(b * theta);
   return { x: cx + r * Math.cos(theta), y: cy + r * Math.sin(theta) };
 }
 
-// Pick a spiral “profile”
-const SPIRAL_TYPES = [
-  "log",
-  "tight",
-  "loose",
-  "flower",
-  "sinewave",
-  "randomwalk",
-  "mirror"
-];
+const SPIRAL_TYPES = ["log","tight","loose","flower","sinewave","randomwalk","mirror"];
 
 function generateArmPoints({cx, cy, armIndex, totalArms, type, points, maxRadius}) {
   const thetaStart = (armIndex / totalArms) * Math.PI * 2;
   const pts = [];
-
   for (let i = 0; i < points; i++) {
     const t = i / (points - 1 || 1);
     let x, y;
-
     switch (type) {
       case "log": {
-        // Choose a,b to fit maxRadius at end
-        const turns = 3.2;                          // ~how many rotations
+        const turns = 3.2;
         const theta = thetaStart + t * turns * 2*Math.PI;
-        const a = 0.6;                              // base
+        const a = 0.6;
         const b = Math.log(1 + maxRadius / a) / (turns * 2*Math.PI);
         const p = logSpiralPoint(cx, cy, a, b, theta);
-        x = p.x; y = p.y;
-        break;
+        x = p.x; y = p.y; break;
       }
       case "tight": {
         const theta = thetaStart + t * 8 * Math.PI;
         const r = t * maxRadius * 0.95;
-        x = cx + Math.cos(theta)*r;
-        y = cy + Math.sin(theta)*r;
-        break;
+        x = cx + Math.cos(theta)*r; y = cy + Math.sin(theta)*r; break;
       }
       case "loose": {
         const theta = thetaStart + t * 2 * Math.PI;
         const r = t * maxRadius * 1.15;
-        x = cx + Math.cos(theta)*r;
-        y = cy + Math.sin(theta)*r;
-        break;
+        x = cx + Math.cos(theta)*r; y = cy + Math.sin(theta)*r; break;
       }
       case "flower": {
         const theta = thetaStart + Math.sin(t * Math.PI * 6);
         const r = Math.max(0, Math.sin(t * Math.PI)) * maxRadius * 1.15;
-        x = cx + Math.cos(theta)*r;
-        y = cy + Math.sin(theta)*r;
-        break;
+        x = cx + Math.cos(theta)*r; y = cy + Math.sin(theta)*r; break;
       }
       case "sinewave": {
         const theta = thetaStart + t * 4 * Math.PI + Math.sin(t*8)*0.25;
         const r = t * maxRadius;
-        x = cx + Math.cos(theta)*r;
-        y = cy + Math.sin(theta)*r;
-        break;
+        x = cx + Math.cos(theta)*r; y = cy + Math.sin(theta)*r; break;
       }
       case "randomwalk": {
         const theta = thetaStart + t * 4 * Math.PI + (getSecureRandomNumber()-0.5)*1.2;
         const r = t * maxRadius;
-        x = cx + Math.cos(theta)*r;
-        y = cy + Math.sin(theta)*r;
-        break;
+        x = cx + Math.cos(theta)*r; y = cy + Math.sin(theta)*r; break;
       }
       case "mirror": {
         const theta = thetaStart + Math.PI * (i % 2);
         const r = t * maxRadius;
-        x = cx + Math.cos(theta)*r;
-        y = cy + Math.sin(theta)*r;
-        break;
+        x = cx + Math.cos(theta)*r; y = cy + Math.sin(theta)*r; break;
       }
       default: {
         const theta = thetaStart + t * 4 * Math.PI;
         const r = t * maxRadius;
-        x = cx + Math.cos(theta)*r;
-        y = cy + Math.sin(theta)*r;
+        x = cx + Math.cos(theta)*r; y = cy + Math.sin(theta)*r;
       }
     }
     pts.push({ x: round(x), y: round(y), t });
@@ -163,7 +131,7 @@ function generateArmPoints({cx, cy, armIndex, totalArms, type, points, maxRadius
   return pts;
 }
 
-// ---------- SVG builders (defs/use for size) ----------
+// ---------- SVG builders ----------
 function buildDefs() {
   return `
     <defs>
@@ -175,8 +143,6 @@ function buildDefs() {
 }
 
 function emitUses(points, { baseR = 2.2, minR = 0.5, fill, opacityCurve = (t)=>Math.pow(1-t,0.5)*0.8 }) {
-  // Group shares fill; each <use> overrides transform and sets opacity via 'opacity' attr
-  // r varies via scale
   let out = `<g fill="${fill}">`;
   for (const p of points) {
     const r = round(minR + (1 - p.t) * baseR, 1);
@@ -187,7 +153,6 @@ function emitUses(points, { baseR = 2.2, minR = 0.5, fill, opacityCurve = (t)=>M
   return out;
 }
 
-// Background stars as random points (cheaper: reuse the same dot)
 function addBackgroundStars(num, color) {
   let out = `<g id="stars" fill="${color}">`;
   for (let i = 0; i < num; i++) {
@@ -202,8 +167,7 @@ function addBackgroundStars(num, color) {
 }
 
 function addGalaxyCore(coreColor) {
-  const r = 69;
-
+  const r = 69; // fixed glow size you approved
   return `
     <defs>
       <radialGradient id="coreGlow" gradientUnits="userSpaceOnUse"
@@ -218,50 +182,70 @@ function addGalaxyCore(coreColor) {
     </g>
   `;
 }
+
+// ---------- 13 palettes (each has 6 distinct colors) ----------
+const PALETTES = [
+  { name: "coolors-1", colors: ["#FDFFFC","#41EAD4","#B91372","#FF0022","#011627","#F7B32B"] },
+  { name: "atelier",   colors: ["#91C4F2","#8CA0D7","#9D79BC","#A14DA0","#7E1F86","#E0E7FF"] },
+  { name: "sunset-mint", colors:["#20BF55","#0B4F6C","#01BAEF","#FBFBFF","#757575","#FDE68A"] },
+  { name: "nocturne",  colors: ["#0b0d10","#94a3b8","#7dd3fc","#38bdf8","#f472b6","#e2e8f0"] },
+  { name: "citrus-pop",colors: ["#0f172a","#fef08a","#34d399","#f97316","#ef4444","#a78bfa"] },
+  { name: "berry-soda",colors: ["#111827","#60a5fa","#22d3ee","#a78bfa","#fb7185","#f8fafc"] },
+  { name: "leafy",     colors: ["#052e16","#16a34a","#86efac","#22c55e","#065f46","#bbf7d0"] },
+  { name: "lava",      colors: ["#1b1a1f","#ef4444","#f59e0b","#fde68a","#fca5a5","#e5e7eb"] },
+  { name: "arctic",    colors: ["#0b132b","#1c2541","#3a506b","#5bc0be","#a0e7e5","#fafafa"] },
+  { name: "sakura",    colors: ["#0a0a0a","#fecdd3","#fda4af","#fb7185","#fdba74","#fff1f2"] },
+  { name: "mono-candy",colors: ["#111111","#cccccc","#999999","#ff6b6b","#ffd93d","#6bcBef"] },
+  { name: "emerald",   colors: ["#052e1a","#10b981","#34d399","#6ee7b7","#a7f3d0","#ecfeff"] },
+  { name: "pop-art",   colors: ["#0f0f0f","#ffdd00","#00e5ff","#ff3b3b","#7cff00","#ffffff"] },
+];
+
 // ---------- main ----------
 export function generateTrait() {
-  // 1) choose a palette
-  const P = pick(PALETTES);
+  // (1) choose palette, then randomly map its colors to roles each time
+  const chosen = pick(PALETTES);
+  const [bg, stars, dust, armA, armB, core] = shuffle(chosen.colors.slice());
 
-  // 2) spiral type: pick once (set perArmSpiralType=true to vary per arm)
-  const perArmSpiralType = false;
+  const P = { bg, stars, dust, armA, armB, core };
+
+  // (2) spiral type (single type across arms for coherence)
   const spiralType = pick(SPIRAL_TYPES);
 
-  // 3) config knobs
+  // (3) config
   const numArms = 6;
   const pointsPerArm = 36;
   const maxRadius = WIDTH * 0.369;
   const numBackgroundStars = 69;
-  const armColors = [P.armA, P.armB];
   const dustEvery = 0.04;
 
-  // 4) build arms
+  // (4) build arms
   let arms = `<g id="arms">`;
   for (let i = 0; i < numArms; i++) {
-    const type = perArmSpiralType ? pick(SPIRAL_TYPES) : spiralType;
     const pts = generateArmPoints({
       cx: WIDTH/2, cy: HEIGHT/2,
       armIndex: i, totalArms: numArms,
-      type, points: pointsPerArm, maxRadius
+      type: spiralType, points: pointsPerArm, maxRadius
     });
 
-    // main arm dots (alternate colors A/B)
-    const col = armColors[i % armColors.length];
-    arms += `<g id="arm-${i}" data-type="${type}">`;
+    // alternate the two arm colors
+    const col = (i % 2 === 0) ? P.armA : P.armB;
+    arms += `<g id="arm-${i}" data-type="${spiralType}">`;
     arms += emitUses(pts, { baseR: 2.6, minR: 0.6, fill: col });
 
-    // dust (larger soft dots, slight tint variance)
+    // dust (soft dots with small tint variance)
     if (dustEvery > 0) {
       const dustPts = pts.filter(()=> getSecureRandomNumber() < dustEvery);
       const dustCol = tint(P.dust, R(-0.08, 0.08));
-      arms += emitUses(dustPts, { baseR: 6, minR: 3, fill: dustCol, opacityCurve:(t)=>round(Math.pow(1-t,0.35)*0.35,2) });
+      arms += emitUses(dustPts, {
+        baseR: 6, minR: 3, fill: dustCol,
+        opacityCurve:(t)=>round(Math.pow(1-t,0.35)*0.35,2)
+      });
     }
-
     arms += `</g>`;
   }
   arms += `</g>`;
 
-  // 5) assemble SVG
+  // (5) assemble SVG (background, stars, arms, core glow)
   const svg =
 `<svg xmlns="${SVG_NS}" width="${WIDTH}" height="${HEIGHT}" viewBox="0 0 ${WIDTH} ${HEIGHT}">
   ${buildDefs()}

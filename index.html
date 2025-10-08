@@ -100,7 +100,7 @@
         <legend>Layers for composite “Generate”</legend>
         <form id="layerForm" class="layers">
           <!-- Keep canonical z-order: bg → wings → phil → spikes → eyes → nose → teeth → top -->
-          <label><input type="checkbox" name="layer" value="bg"> Background</label>
+          <label><input type="checkbox" name="layer" value="bg" checked> Background</label>
           <label><input type="checkbox" name="layer" value="wings"> Wings</label>
           <label><input type="checkbox" name="layer" value="phil"> Phil</label>
           <label><input type="checkbox" name="layer" value="spikes"> Spikes</label>
@@ -157,6 +157,7 @@
     }
 
     function upsertThumb(trait, svg) {
+      if (!previewGrid) return;
       const id = 'thumb-' + trait;
       let card = document.getElementById(id);
       const url = svgToDataUrl(svg);
@@ -177,27 +178,20 @@
           e.preventDefault();
           const a = document.createElement('a');
           a.href = url;
-          a.download = `phil-${trait}.svg`;
+          a.download = `phil-${trait}.svg`;   <!-- ✅ FIXED -->
           document.body.appendChild(a);
           a.click();
           a.remove();
         });
       }
 
-      const img = card.querySelector('img');
-      img.src = url;
+      card.querySelector('img').src = url;
     }
 
     // Receive optimized single-trait SVGs from app.js
     window.addEventListener('message', (e) => {
       const msg = e.data || {};
-      if (
-        msg &&
-        msg.source === 'createPhil' &&
-        msg.kind === 'preview-layer' &&
-        msg.trait &&
-        msg.svg
-      ) {
+      if (msg && msg.source === 'createPhil' && msg.kind === 'preview-layer' && msg.trait && msg.svg) {
         upsertThumb(msg.trait, msg.svg);
       }
     });

@@ -86,7 +86,10 @@ function compose(hrefs) {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">${images}</svg>`;
 }
 
-let lastSVG = '';
+// --- NEW: keep both composite and inline (single-layer) versions for export ---
+let lastSVG = '';            // composite wrapper used for preview
+let lastInlineSVG = '';      // raw trait SVG when exactly one trait selected
+let lastWasSingle = false;   // selection size at generation time
 
 async function generate() {
   clearLog();
@@ -108,6 +111,8 @@ async function generate() {
   const orderedIds = LAYERS.map(l => l.id).filter(id => selected.has(id));
 
   const hrefs = [];
+  const svgs  = []; // NEW: keep raw trait SVG strings
+
   for (const id of orderedIds) {
     const layer = LAYERS.find(l => l.id === id);
     if (!layer) continue;
@@ -119,6 +124,7 @@ async function generate() {
         continue;
       }
       const svg = await mod.generateTrait(); // defaults keep each trait's internal style
+      svgs.push(svg);                        // NEW: store inline SVG
       hrefs.push(svgToImageHref(svg));
       log(`✓ ${layer.name} generated.`);
     } catch (err) {
@@ -132,7 +138,13 @@ async function generate() {
     return;
   }
 
+  // For preview we still show the composed wrapper as before
   lastSVG = compose(hrefs);
+
+  // For saving: if exactly one trait, keep the inline version
+  lastWasSingle  = (svgs.length === 1);
+  lastInlineSVG  = lastWasSingle ? svgs[0] : '';
+
   if (stage) stage.innerHTML = lastSVG;
   if (saveBtn) saveBtn.disabled = false;
   if (savePngBtn) savePngBtn.disabled = false;
@@ -142,9 +154,12 @@ async function generate() {
 async function save() {
   if (!lastSVG) return;
 
-  let finalSVG = lastSVG;
+  // Prefer the inline single-trait SVG (smaller, fully minified) when only one layer was selected
+  const candidate = (lastWasSingle && lastInlineSVG) ? lastInlineSVG : lastSVG;
+
+  let finalSVG = candidate;
   try {
-    finalSVG = await optimizeSVG(lastSVG);   // SVGO in worker
+    finalSVG = await optimizeSVG(candidate);   // SVGO in worker
   } catch (e) {
     console.warn('SVGO optimize failed; falling back to raw SVG:', e);
   }
@@ -227,6 +242,8 @@ async function savePNG(targetPx) {
 
 function clearStage(){
   lastSVG = '';
+  lastInlineSVG = '';
+  lastWasSingle = false;
   if (stage) stage.innerHTML = '';
   if (saveBtn) saveBtn.disabled = true;
   if (savePngBtn) savePngBtn.disabled = true;

@@ -1,231 +1,277 @@
-// bgTrait.js (updated with configurable random color counts for arms, stars, and dust)
+// bgTrait.js — palette-based, random spiral type, defs/use reuse, crisp + smaller output
+// Drop-in replacement for your current file.
 
-import { getSecureRandomNumber, getColorByNumber } from "../utils/colorUtils.js";
+import { getSecureRandomNumber } from "../utils/colorUtils.js"; // keep your RNG
 import { validateSVGSize } from "../utils/sizeValidation.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
-const WIDTH = 420;
-const HEIGHT = 420;
+const WIDTH = 420, HEIGHT = 420;
 
-function roundTo(num, decimals = 1) {
-  return parseFloat(num.toFixed(decimals));
+// ---------- utils ----------
+const R = (min, max) => min + getSecureRandomNumber() * (max - min);
+const RI = (min, max) => Math.floor(R(min, max + 1));
+const pick = (arr) => arr[RI(0, arr.length - 1)];
+const round = (n, d = 1) => Number(n.toFixed(d));
+
+// ---------- harmonious palettes (hex) ----------
+const PALETTES = [
+  // Your example from coolors.co
+  { name: "coolors-1",
+    bg: "#011627", stars: "#FDFFFC", dust: "#41EAD4", armA: "#FF0022", armB: "#B91372", core: "#FDFFFC" },
+  // Two more to start (tweak anytime)
+  { name: "atelier",
+    bg: "#0b0d10", stars: "#c8d1ff", dust: "#7cc5ff", armA: "#8b5cf6", armB: "#22d3ee", core: "#e0e7ff" },
+  { name: "sunset-mint",
+    bg: "#0f172a", stars: "#fef9c3", dust: "#86efac", armA: "#fb7185", armB: "#f97316", core: "#fde68a" },
+];
+
+// For subtle variance within a role color
+function tint(hex, amt = 0.0) {
+  // amt in [-0.2..0.2], small HSL lightness tweak to avoid flatness
+  const { h, s, l } = rgbToHsl(hexToRgb(hex));
+  const l2 = Math.max(0, Math.min(1, l + amt));
+  return rgbToHex(hslToRgb({ h, s, l: l2 }));
 }
-
-/**
- * For arms and stars:
- * - If colorInput is an array, use it (or default to [0] if empty).
- * - If colorInput is 0, generate an array of random colors of length randomCount.
- * - Otherwise, return an array with the provided color.
- */
-function normalizeGeneralColorArray(colorInput, randomCount) {
-  if (Array.isArray(colorInput)) {
-    return colorInput.length ? colorInput : [0];
-  } else {
-    if (colorInput === 0) {
-      let colors = [];
-      for (let i = 0; i < randomCount; i++) {
-        colors.push(getSecureRandomColorIndex());
-      }
-      return colors;
-    } else {
-      return [colorInput];
+function hexToRgb(hex) {
+  const m = hex.replace("#","").match(/.{2}/g).map(x => parseInt(x,16));
+  return { r:m[0], g:m[1], b:m[2] };
+}
+function rgbToHex({r,g,b}) {
+  const h = (n)=>n.toString(16).padStart(2,"0");
+  return "#"+h(r)+h(g)+h(b);
+}
+function rgbToHsl({r,g,b}) {
+  r/=255; g/=255; b/=255;
+  const max=Math.max(r,g,b), min=Math.min(r,g,b);
+  let h,s,l=(max+min)/2;
+  if(max===min){ h=s=0; } else {
+    const d=max-min;
+    s = l>0.5 ? d/(2-max-min) : d/(max+min);
+    switch(max){
+      case r: h=(g-b)/d+(g<b?6:0); break;
+      case g: h=(b-r)/d+2; break;
+      case b: h=(r-g)/d+4; break;
     }
+    h/=6;
   }
+  return {h,s,l};
 }
-
-/**
- * For dust:
- * - If colorInput is an array, use it (or default to [0] if empty).
- * - If colorInput is 0, generate an array of random dust colors of length count.
- * - Otherwise, return an array filled with the provided color repeated.
- */
-function normalizeDustColorArray(colorInput, count) {
-  if (Array.isArray(colorInput)) {
-    return colorInput.length ? colorInput : [0];
-  } else {
-    if (colorInput === 0) {
-      let colors = [];
-      for (let i = 0; i < count; i++) {
-        colors.push(getSecureRandomColorIndex());
-      }
-      return colors;
-    } else {
-      return Array(count).fill(colorInput);
-    }
+function hslToRgb({h,s,l}) {
+  let r,g,b;
+  if(s===0){ r=g=b=l; }
+  else {
+    const hue2rgb=(p,q,t)=>{ if(t<0) t+=1; if(t>1) t-=1;
+      if(t<1/6) return p+(q-p)*6*t;
+      if(t<1/2) return q;
+      if(t<2/3) return p+(q-p)*(2/3-t)*6;
+      return p;
+    };
+    const q = l<0.5 ? l*(1+s) : l+s-l*s;
+    const p = 2*l-q;
+    r=hue2rgb(p,q,h+1/3); g=hue2rgb(p,q,h); b=hue2rgb(p,q,h-1/3);
   }
+  return { r:Math.round(r*255), g:Math.round(g*255), b:Math.round(b*255) };
 }
 
-function getSecureRandomColorIndex() {
-  return Math.floor(getSecureRandomNumber() * 68) + 1;
+// ---------- spiral math ----------
+function logSpiralPoint(cx, cy, a, b, theta) {
+  // r = a * e^(bθ)
+  const r = a * Math.exp(b * theta);
+  return { x: cx + r * Math.cos(theta), y: cy + r * Math.sin(theta) };
 }
 
-function createSpiralArm(centerX, centerY, armIndex, totalArms, config) {
-  const POINTS = config.particlesPerArm || 69;
-  const MAX_RADIUS = WIDTH * 0.4963;
-  const type = config.spiralType || "classic";
+// Pick a spiral “profile”
+const SPIRAL_TYPES = [
+  "log",
+  "tight",
+  "loose",
+  "flower",
+  "sinewave",
+  "randomwalk",
+  "mirror"
+];
 
-  const rotationOffset = (armIndex / totalArms) * Math.PI * 2;
-  let content = "";
+function generateArmPoints({cx, cy, armIndex, totalArms, type, points, maxRadius}) {
+  const thetaStart = (armIndex / totalArms) * Math.PI * 2;
+  const pts = [];
 
-  for (let i = 0; i < POINTS; i++) {
-    const t = i / POINTS;
-    let radius = t * MAX_RADIUS;
-    let angle;
+  for (let i = 0; i < points; i++) {
+    const t = i / (points - 1 || 1);
+    let x, y;
 
     switch (type) {
-      case "tight":
-        angle = rotationOffset + t * Math.PI * 8;
-        radius *= 1;
+      case "log": {
+        // Choose a,b to fit maxRadius at end
+        const turns = 3.2;                          // ~how many rotations
+        const theta = thetaStart + t * turns * 2*Math.PI;
+        const a = 0.6;                              // base
+        const b = Math.log(1 + maxRadius / a) / (turns * 2*Math.PI);
+        const p = logSpiralPoint(cx, cy, a, b, theta);
+        x = p.x; y = p.y;
         break;
-      case "loose":
-        angle = rotationOffset + t * Math.PI * 2;
-        radius *= 1.25;
+      }
+      case "tight": {
+        const theta = thetaStart + t * 8 * Math.PI;
+        const r = t * maxRadius * 0.95;
+        x = cx + Math.cos(theta)*r;
+        y = cy + Math.sin(theta)*r;
         break;
-      case "sinewave":
-        angle = rotationOffset + Math.sin(t * Math.PI * 4);
-        radius *= 1;
+      }
+      case "loose": {
+        const theta = thetaStart + t * 2 * Math.PI;
+        const r = t * maxRadius * 1.15;
+        x = cx + Math.cos(theta)*r;
+        y = cy + Math.sin(theta)*r;
         break;
-      case "zigzag":
-        angle = rotationOffset + (i % 2 === 0 ? 1 : -1) * Math.PI * t;
+      }
+      case "flower": {
+        const theta = thetaStart + Math.sin(t * Math.PI * 6);
+        const r = Math.max(0, Math.sin(t * Math.PI)) * maxRadius * 1.15;
+        x = cx + Math.cos(theta)*r;
+        y = cy + Math.sin(theta)*r;
         break;
-      case "randomwalk":
-        angle = rotationOffset + t * Math.PI * 4 + (getSecureRandomNumber() - 0.5) * 2;
+      }
+      case "sinewave": {
+        const theta = thetaStart + t * 4 * Math.PI + Math.sin(t*8)*0.25;
+        const r = t * maxRadius;
+        x = cx + Math.cos(theta)*r;
+        y = cy + Math.sin(theta)*r;
         break;
-      case "logarithmic":
-        angle = rotationOffset + t * Math.log(1 + t * 20);
+      }
+      case "randomwalk": {
+        const theta = thetaStart + t * 4 * Math.PI + (getSecureRandomNumber()-0.5)*1.2;
+        const r = t * maxRadius;
+        x = cx + Math.cos(theta)*r;
+        y = cy + Math.sin(theta)*r;
         break;
-      case "flower":
-        angle = rotationOffset + Math.sin(t * Math.PI * 6);
-        radius *= Math.sin(t * Math.PI) * 1.369;
+      }
+      case "mirror": {
+        const theta = thetaStart + Math.PI * (i % 2);
+        const r = t * maxRadius;
+        x = cx + Math.cos(theta)*r;
+        y = cy + Math.sin(theta)*r;
         break;
-      case "mirror":
-        angle = rotationOffset + Math.PI * (i % 2);
-        break;
-      default:
-        angle = rotationOffset + t * Math.PI * 4;
+      }
+      default: {
+        const theta = thetaStart + t * 4 * Math.PI;
+        const r = t * maxRadius;
+        x = cx + Math.cos(theta)*r;
+        y = cy + Math.sin(theta)*r;
+      }
     }
-
-    const x = centerX + Math.cos(angle) * radius;
-    const y = centerY + Math.sin(angle) * radius;
-
-    const opacity = Math.pow(1 - t, 0.5) * 0.8;
-    const size = roundTo((1 - t) * 3 + 0.5, 1);
-    // Use the normalized armColors array (cycles through random or specified colors)
-    const color = getColorByNumber(config.armColors[i % config.armColors.length]);
-
-    content += `<circle cx="${roundTo(x)}" cy="${roundTo(y)}" r="${size}" fill="${color}" opacity="${roundTo(opacity, 2)}"/>`;
-
-    if (getSecureRandomNumber() < config.dustDensity) {
-      const dustSize = roundTo(getSecureRandomNumber() * 15 + 5, 1);
-      // Use the precomputed normalizedDustColors array.
-      const dustColor = getColorByNumber(config.normalizedDustColors[i % config.normalizedDustColors.length]);
-      content += `<circle cx="${roundTo(x)}" cy="${roundTo(y)}" r="${dustSize}" fill="${dustColor}" opacity="${roundTo(opacity * 0.3, 2)}"/>`;
-    }
+    pts.push({ x: round(x), y: round(y), t });
   }
-
-  return content;
+  return pts;
 }
 
-function addGalaxyCore(config) {
-  const radius = config.coreRadius;
-  const color = getColorByNumber(config.coreColor);
-  const stops = config.coreOpacityStops;
-
+// ---------- SVG builders (defs/use for size) ----------
+function buildDefs() {
+  // A single dot symbol reused everywhere
   return `
     <defs>
+      <symbol id="d" overflow="visible">
+        <circle cx="0" cy="0" r="1"></circle>
+      </symbol>
       <radialGradient id="coreGlow">
-        <stop offset="0" stop-color="${color}" stop-opacity="${stops[0]}"/>
-        <stop offset="0.5" stop-color="${color}" stop-opacity="${stops[1]}"/>
-        <stop offset="1" stop-color="${color}" stop-opacity="${stops[2]}"/>
+        <stop offset="0" stop-opacity="0.65"/>
+        <stop offset="0.55" stop-opacity="0.28"/>
+        <stop offset="1" stop-opacity="0"/>
       </radialGradient>
     </defs>
+  `;
+}
+
+function emitUses(points, { baseR = 2.2, minR = 0.5, fill, opacityCurve = (t)=>Math.pow(1-t,0.5)*0.8 }) {
+  // Group shares fill; each <use> overrides transform and sets opacity via 'opacity' attr
+  // r varies via scale
+  let out = `<g fill="${fill}">`;
+  for (const p of points) {
+    const r = round(minR + (1 - p.t) * baseR, 1);
+    const o = round(opacityCurve(p.t), 2);
+    out += `<use href="#d" transform="translate(${p.x} ${p.y}) scale(${r})" opacity="${o}"/>`;
+  }
+  out += `</g>`;
+  return out;
+}
+
+// Background stars as random points (cheaper: reuse the same dot)
+function addBackgroundStars(num, color) {
+  let out = `<g id="stars" fill="${color}">`;
+  for (let i = 0; i < num; i++) {
+    const x = round(R(0, WIDTH), 1);
+    const y = round(R(0, HEIGHT), 1);
+    const r = round(R(0.3, 1.6), 1);
+    const o = round(R(0.25, 1), 2);
+    out += `<use href="#d" transform="translate(${x} ${y}) scale(${r})" opacity="${o}"/>`;
+  }
+  out += `</g>`;
+  return out;
+}
+
+function addGalaxyCore(coreColor) {
+  return `
     <g id="core">
-      <circle cx="${WIDTH / 2}" cy="${HEIGHT / 2}" r="${radius}" fill="url(#coreGlow)"/>
+      <circle cx="${WIDTH/2}" cy="${HEIGHT/2}" r="${round(WIDTH*0.42)}"
+        fill="${coreColor}" opacity="0.08"/>
+      <circle cx="${WIDTH/2}" cy="${HEIGHT/2}" r="${round(WIDTH*0.42)}"
+        fill="url(#coreGlow)" />
     </g>
   `;
 }
 
-function addBackgroundStars(config) {
-  const numStars = config.numStars;
-  // Use normalized starColors array based on the new random count setting.
-  const colors = config.starColors;
-
-  let content = "<g id='stars'>";
-  for (let i = 0; i < numStars; i++) {
-    const x = roundTo(getSecureRandomNumber() * WIDTH, 1);
-    const y = roundTo(getSecureRandomNumber() * HEIGHT, 1);
-    const size = roundTo(getSecureRandomNumber() * 1.5 + 0.5, 1);
-    const opacity = roundTo(getSecureRandomNumber(), 2);
-    const color = getColorByNumber(colors[i % colors.length]);
-
-    content += `<circle cx="${x}" cy="${y}" r="${size}" fill="${color}" opacity="${opacity}"/>`;
-  }
-  content += "</g>";
-  return content;
-}
-
+// ---------- main ----------
 export function generateTrait() {
-  const config = {
-    backgroundColor: 0,
-    numArms: 6,
-    particlesPerArm: 69,
-    spiralType: "tight",
-    // For arms: set armColors to 0 for random; armRandomCount controls how many random colors are generated
-    armColors: 0,
-    armRandomCount: 1, // Change this (e.g., 1, 2, 3, ...) for multiple random arm colors
-    dustDensity: 0.0369,
-    // For dust: set dustColor to 0 for random; dustRandomCount controls how many random dust colors are generated
-    dustColor: 0, // Set to 0 to use random dust colors
-    dustRandomCount: 1,
-    coreColor: 0,
-    coreRadius: WIDTH * 0.42,
-    coreOpacityStops: [0.6, 0.3, 0],
-    numStars: 369,
-    // For stars: set starColors to 0 for random; starRandomCount controls how many random star colors are generated
-    starColors: 0,
-    starRandomCount: 1 // Change this (e.g., 1, 2, 3, ...) for multiple random star colors
-  };
+  // 1) choose a palette
+  const P = pick(PALETTES);
 
-  // Normalize color arrays for arms, stars, and dust.
-  config.armColors = normalizeGeneralColorArray(config.armColors, config.armRandomCount);
-  config.starColors = normalizeGeneralColorArray(config.starColors, config.starRandomCount);
-  config.normalizedDustColors = normalizeDustColorArray(config.dustColor, config.dustRandomCount);
+  // 2) spiral type: pick once (set perArmSpiralType=true to vary per arm)
+  const perArmSpiralType = false;
+  const spiralType = pick(SPIRAL_TYPES);
 
-  const svg = `
-    <svg xmlns="${SVG_NS}" width="${WIDTH}" height="${HEIGHT}" viewBox="0 0 ${WIDTH} ${HEIGHT}">
-      <rect width="100%" height="100%" fill="${getColorByNumber(config.backgroundColor)}"/>
-      ${addBackgroundStars(config)}
-      <g id="arms">
-        ${Array.from({ length: config.numArms }).map((_, i) =>
-          createSpiralArm(WIDTH / 2, HEIGHT / 2, i, config.numArms, config)
-        ).join("")}
-      </g>
-      ${addGalaxyCore(config)}
-    </svg>
-  `.replace(/\s*\n\s*/g, " ").trim();
+  // 3) config knobs
+  const numArms = 6;
+  const pointsPerArm = 69;                 // keep your vibe
+  const maxRadius = WIDTH * 0.495;
+  const numBackgroundStars = 369;
+  const armColors = [P.armA, P.armB];      // will alternate A/B
+  const dustEvery = 0.04;                  // probability per point
+
+  // 4) build arms
+  let arms = `<g id="arms">`;
+  for (let i = 0; i < numArms; i++) {
+    const type = perArmSpiralType ? pick(SPIRAL_TYPES) : spiralType;
+    const pts = generateArmPoints({
+      cx: WIDTH/2, cy: HEIGHT/2,
+      armIndex: i, totalArms: numArms,
+      type, points: pointsPerArm, maxRadius
+    });
+
+    // main arm dots (alternate colors A/B)
+    const col = armColors[i % armColors.length];
+    arms += `<g id="arm-${i}" data-type="${type}">`;
+    arms += emitUses(pts, { baseR: 2.6, minR: 0.6, fill: col });
+
+    // dust (larger soft dots, slight tint variance)
+    if (dustEvery > 0) {
+      const dustPts = pts.filter(()=> getSecureRandomNumber() < dustEvery);
+      const dustCol = tint(P.dust, R(-0.08, 0.08));
+      arms += emitUses(dustPts, { baseR: 6, minR: 3, fill: dustCol, opacityCurve:(t)=>round(Math.pow(1-t,0.35)*0.35,2) });
+    }
+
+    arms += `</g>`;
+  }
+  arms += `</g>`;
+
+  // 5) assemble SVG
+  const svg =
+`<svg xmlns="${SVG_NS}" width="${WIDTH}" height="${HEIGHT}" viewBox="0 0 ${WIDTH} ${HEIGHT}">
+  ${buildDefs()}
+  <g id="bg"><rect width="100%" height="100%" fill="${P.bg}"/></g>
+  ${addBackgroundStars(numBackgroundStars, P.stars)}
+  ${arms}
+  ${addGalaxyCore(P.core)}
+</svg>`.replace(/\s*\n\s*/g, " ").trim();
 
   validateSVGSize(svg);
   return svg;
 }
-
-/**
- * --- README for bgTrait.js ---
- *
- * You can customize this trait by editing the `config` object in `generateTrait()`:
- *
- * - `backgroundColor`: Integer 0–68 (0 = random single color)
- * - `numArms`: Number of spiral arms (e.g., 2–9)
- * - `particlesPerArm`: Number of stars/points in each spiral arm
- * - `spiralType`: Choose from: "classic", "tight", "loose", "sinewave", "zigzag", "randomwalk", "logarithmic", "flower", "mirror"
- * - `armColors`: 0 = use random colors, or provide an array of numbers (from colorUtils.js)
- * - `armRandomCount`: When `armColors` is 0, this sets how many random colors to generate for the arms
- * - `dustDensity`: 0.01 (low dust) to 1.0 (high dust fill)
- * - `dustColor`: 0 = use random dust colors, or provide a specific color index or array of color indices
- * - `dustRandomCount`: When `dustColor` is 0, this sets how many random dust colors to generate
- * - `coreColor`: 0 = random or specify a color index
- * - `coreRadius`: Radius of glowing core (e.g., WIDTH * 0.2)
- * - `coreOpacityStops`: Array of 3 values between 0–1 to control glow transparency
- * - `numStars`: Total number of background stars (e.g., 10–200)
- * - `starColors`: 0 = use random colors, or provide an array of numbers
- * - `starRandomCount`: When `starColors` is 0, this sets how many random colors to generate for the stars
- */

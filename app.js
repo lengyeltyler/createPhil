@@ -4,6 +4,8 @@
 // - Each trait SVG is embedded as a data: URL <image> to avoid ID collisions.
 // - Optional Service Worker keeps /traits_json fetches working under subpaths.
 
+import { optimizeSVG } from './svgoClient.js';
+
 const W = 420, H = 420;
 const logEl   = document.getElementById('log');
 const stage   = document.getElementById('stage');
@@ -137,9 +139,18 @@ async function generate() {
   if (genBtn) genBtn.disabled = false;
 }
 
-function save() {
+async function save() {
   if (!lastSVG) return;
-  const blob = new Blob([lastSVG], { type: 'image/svg+xml;charset=utf-8' });
+
+  let finalSVG = lastSVG;
+  try {
+    // Full SVGO optimization in a Worker (non-blocking)
+    finalSVG = await optimizeSVG(lastSVG);
+  } catch (e) {
+    console.warn('SVGO optimize failed; falling back to raw SVG:', e);
+  }
+
+  const blob = new Blob([finalSVG], { type: 'image/svg+xml;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url; a.download = 'phil.svg';
@@ -194,7 +205,7 @@ function clearStage(){
 }
 
 genBtn?.addEventListener('click', generate);
-saveBtn?.addEventListener('click', save);
+saveBtn?.addEventListener('click', () => { save(); });
 clearBtn?.addEventListener('click', clearStage);
 
 // --- NEW: hook up PNG export ---

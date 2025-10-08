@@ -7,6 +7,8 @@ const SVG_NS = "http://www.w3.org/2000/svg";
 const WIDTH = 420, HEIGHT = 420;
 
 // ---------- rng & helpers ----------
+const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
+const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
 const R  = (min, max) => min + getSecureRandomNumber() * (max - min);
 const RI = (min, max) => Math.floor(R(min, max + 1));
 const round = (n, d = 1) => Number(n.toFixed(d));
@@ -73,7 +75,15 @@ function logSpiralPoint(cx, cy, a, b, theta) {
   return { x: cx + r * Math.cos(theta), y: cy + r * Math.sin(theta) };
 }
 
-const SPIRAL_TYPES = ["log","tight","loose","flower","sinewave","randomwalk","mirror"];
+const SPIRAL_TYPES = [
+  "log", "tight", "loose", "flower", "sinewave", "randomwalk", "mirror",
+  "arch",        // Archimedean (r ∝ θ)
+  "fermat",      // Fermat (r ∝ √θ) — gentle growth
+  "lituus",      // Lituus (r ∝ 1/√θ) — inward curl
+  "rose",        // Rose curve lobes along an outward spiral
+  "phyllo",      // Phyllotaxis (golden-angle) point placement
+  "noisy"        // Low-frequency noise-like wiggle
+];
 
 function generateArmPoints({cx, cy, armIndex, totalArms, type, points, maxRadius}) {
   const thetaStart = (armIndex / totalArms) * Math.PI * 2;
@@ -119,6 +129,70 @@ function generateArmPoints({cx, cy, armIndex, totalArms, type, points, maxRadius
         const theta = thetaStart + Math.PI * (i % 2);
         const r = t * maxRadius;
         x = cx + Math.cos(theta)*r; y = cy + Math.sin(theta)*r; break;
+      }
+      case "arch": { // Archimedean: r = k * θ (monotonic, linear growth)
+        const turns = 3.6;
+        const theta = thetaStart + t * turns * 2 * Math.PI;
+        // choose k so that at t=1 we hit ~maxRadius
+        const k = maxRadius / (turns * 2 * Math.PI);
+        const r = k * (theta - thetaStart);
+        x = cx + Math.cos(theta) * r;
+        y = cy + Math.sin(theta) * r;
+        break;
+      }
+
+      case "fermat": { // Fermat: r = c * √θ (slow start, then opens)
+        const turns = 3.2;
+        const theta = thetaStart + t * turns * 2 * Math.PI;
+        const total = turns * 2 * Math.PI;
+        const c = maxRadius / Math.sqrt(total);
+        const r = c * Math.sqrt(Math.max(0, theta - thetaStart));
+        x = cx + Math.cos(theta) * r;
+        y = cy + Math.sin(theta) * r;
+        break;
+      }
+
+      case "lituus": { // Lituus: r = k / √θ (strong inward curl)
+        const turns = 3.0;
+        // walk backward so start is larger, end tighter near center
+        const theta = thetaStart + (1 - t) * turns * 2 * Math.PI + 0.001; // avoid div/0
+        const k = maxRadius * Math.sqrt(turns * 2 * Math.PI); // scale so t=0 yields ~maxRadius
+        const r = k / Math.sqrt(theta - thetaStart);
+        x = cx + Math.cos(theta) * r;
+        y = cy + Math.sin(theta) * r;
+        break;
+      }
+
+      case "rose": { // Rose lobes along an outward spiral envelope
+        const turns = 3.2;
+        const theta = thetaStart + t * turns * 2 * Math.PI;
+        const lobes = 5 + Math.floor(getSecureRandomNumber() * 4); // 5–8
+        const envelope = easeOutCubic(t) * maxRadius;
+        const r = envelope * (0.55 + 0.45 * Math.abs(Math.sin(lobes * theta)));
+        x = cx + Math.cos(theta) * r;
+        y = cy + Math.sin(theta) * r;
+        break;
+      }
+
+      case "phyllo": { // Golden-angle phyllotaxis projected radially
+        // Map i to a “seed index” s so dots form a sunflower-like arm
+        const s = i + armIndex * 7; // offset arms so they don’t overlap
+        const r = Math.sqrt(s / (points - 1 || 1)) * maxRadius; // √n spacing
+        const theta = thetaStart + s * GOLDEN_ANGLE;
+        x = cx + Math.cos(theta) * r;
+        y = cy + Math.sin(theta) * r;
+        break;
+      }
+
+      case "noisy": { // Low-freq wobble in both angle and radius
+        const baseTurns = 3.8;
+        const wob = 0.35 * Math.sin(t * 6 + armIndex * 0.9) +
+                    0.2  * Math.sin(t * 11.3 + i * 0.17);
+        const theta = thetaStart + t * baseTurns * 2 * Math.PI + wob * 0.35;
+        const r = (easeOutCubic(t) * maxRadius) * (1 + wob * 0.15);
+        x = cx + Math.cos(theta) * r;
+        y = cy + Math.sin(theta) * r;
+        break;
       }
       default: {
         const theta = thetaStart + t * 4 * Math.PI;
@@ -185,7 +259,7 @@ function addGalaxyCore(coreColor) {
 
 // ---------- 13 palettes (each has 6 distinct colors) ----------
 const PALETTES = [
-  { name: "coolors-1", colors: ["#FDFFFC","#41EAD4","#B91372","#FF0022","#011627","#F7B32B"] },
+  { name: "one", colors: ["#FDFFFC","#41EAD4","#B91372","#FF0022","#011627","#F7B32B"] },
   { name: "atelier",   colors: ["#91C4F2","#8CA0D7","#9D79BC","#A14DA0","#7E1F86","#E0E7FF"] },
   { name: "sunset-mint", colors:["#20BF55","#0B4F6C","#01BAEF","#FBFBFF","#757575","#FDE68A"] },
   { name: "nocturne",  colors: ["#0b0d10","#94a3b8","#7dd3fc","#38bdf8","#f472b6","#e2e8f0"] },

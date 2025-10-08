@@ -269,18 +269,18 @@ function addGalaxyCore(coreColor, rOverride) {
 // ---------- 13 palettes (each has 6 distinct colors) ----------
 const PALETTES = [
   { name: "one", colors: ["#FDFFFC","#41EAD4","#B91372","#FF0022","#011627","#F7B32B"] },
-  { name: "atelier",   colors: ["#91C4F2","#8CA0D7","#9D79BC","#A14DA0","#7E1F86","#E0E7FF"] },
-  { name: "sunset-mint", colors:["#20BF55","#0B4F6C","#01BAEF","#FBFBFF","#757575","#FDE68A"] },
-  { name: "nocturne",  colors: ["#0b0d10","#94a3b8","#7dd3fc","#38bdf8","#f472b6","#e2e8f0"] },
-  { name: "citrus-pop",colors: ["#0f172a","#fef08a","#34d399","#f97316","#ef4444","#a78bfa"] },
-  { name: "berry-soda",colors: ["#111827","#60a5fa","#22d3ee","#a78bfa","#fb7185","#f8fafc"] },
-  { name: "leafy",     colors: ["#052e16","#16a34a","#86efac","#22c55e","#065f46","#bbf7d0"] },
-  { name: "lava",      colors: ["#1b1a1f","#ef4444","#f59e0b","#fde68a","#fca5a5","#e5e7eb"] },
-  { name: "arctic",    colors: ["#0b132b","#1c2541","#3a506b","#5bc0be","#a0e7e5","#fafafa"] },
-  { name: "sakura",    colors: ["#0a0a0a","#fecdd3","#fda4af","#fb7185","#fdba74","#fff1f2"] },
-  { name: "mono-candy",colors: ["#111111","#cccccc","#999999","#ff6b6b","#ffd93d","#6bcBef"] },
-  { name: "emerald",   colors: ["#052e1a","#10b981","#34d399","#6ee7b7","#a7f3d0","#ecfeff"] },
-  { name: "pop-art",   colors: ["#0f0f0f","#ffdd00","#00e5ff","#ff3b3b","#7cff00","#ffffff"] },
+  { name: "two",   colors: ["#91C4F2","#8CA0D7","#9D79BC","#A14DA0","#7E1F86","#E0E7FF"] },
+  { name: "three", colors:["#20BF55","#0B4F6C","#01BAEF","#FBFBFF","#757575","#FDE68A"] },
+  { name: "four",  colors: ["#0b0d10","#94a3b8","#7dd3fc","#38bdf8","#f472b6","#e2e8f0"] },
+  { name: "five",colors: ["#0f172a","#fef08a","#34d399","#f97316","#ef4444","#a78bfa"] },
+  { name: "six",colors: ["#111827","#60a5fa","#22d3ee","#a78bfa","#fb7185","#f8fafc"] },
+  { name: "seven",     colors: ["#052e16","#16a34a","#86efac","#22c55e","#065f46","#bbf7d0"] },
+  { name: "eight",      colors: ["#1b1a1f","#ef4444","#f59e0b","#fde68a","#fca5a5","#e5e7eb"] },
+  { name: "nine",    colors: ["#0b132b","#1c2541","#3a506b","#5bc0be","#a0e7e5","#fafafa"] },
+  { name: "ten",    colors: ["#0a0a0a","#fecdd3","#fda4af","#fb7185","#fdba74","#fff1f2"] },
+  { name: "eleven",colors: ["#111111","#cccccc","#999999","#ff6b6b","#ffd93d","#6bcBef"] },
+  { name: "twelve",   colors: ["#052e1a","#10b981","#34d399","#6ee7b7","#a7f3d0","#ecfeff"] },
+  { name: "thirteen",   colors: ["#0f0f0f","#ffdd00","#00e5ff","#ff3b3b","#7cff00","#ffffff"] },
 ];
 
 // ---------- main ----------

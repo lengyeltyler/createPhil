@@ -203,7 +203,7 @@ function addBackgroundStars(num, color) {
 }
 
 function addGalaxyCore(coreColor) {
-  const r = 134;
+  const r = 36;
 
   return `
     <defs>

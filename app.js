@@ -109,6 +109,22 @@ async function importTrait(id) {
   return await (meta.importerCacheBusted ? meta.importerCacheBusted() : meta.importer());
 }
 
+// Safely post a single-trait SVG to the preview panel (works embedded or standalone)
+function postToParentPreview(trait, svg) {
+  try {
+    const target = (window.top && window.top.postMessage) ? window.top : window;
+    target.postMessage({
+      source: 'createPhil',
+      kind: 'preview-layer',
+      trait,   // e.g., 'bg', 'wings', ...
+      svg
+    }, '*');
+    log(`› Sent ${trait} to parent preview.`);
+  } catch (err) {
+    console.warn('postMessage(preview-layer) failed:', err);
+  }
+}
+
 // --------------------------
 // Composite generation (UI)
 // --------------------------
@@ -209,17 +225,7 @@ async function saveOne(traitId) {
     }
 
     // Send the single-trait SVG back to parent to be dropped into the preview box
-    try {
-      window.top?.postMessage({
-        source: 'createPhil',
-        kind: 'preview-layer',
-        trait: traitId,
-        svg
-      }, '*');
-      log(`→ Sent ${traitId} to parent preview.`);
-    } catch (e) {
-      console.warn('postMessage(preview-layer) failed:', e);
-    }
+    postToParentPreview(traitId, svg);
   } catch (e) {
     log(`✗ Save ${traitId} failed: ${e?.message || e}`);
   }

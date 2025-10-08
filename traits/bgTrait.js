@@ -203,7 +203,7 @@ function addBackgroundStars(num, color) {
 }
 
 function addGalaxyCore(coreColor) {
-  const r = 36;
+  const r = 69;
 
   return `
     <defs>
@@ -230,11 +230,11 @@ export function generateTrait() {
 
   // 3) config knobs
   const numArms = 6;
-  const pointsPerArm = 69;                 // keep your vibe
-  const maxRadius = WIDTH * 0.495;
-  const numBackgroundStars = 369;
-  const armColors = [P.armA, P.armB];      // will alternate A/B
-  const dustEvery = 0.04;                  // probability per point
+  const pointsPerArm = 36;
+  const maxRadius = WIDTH * 0.369;
+  const numBackgroundStars = 69;
+  const armColors = [P.armA, P.armB];
+  const dustEvery = 0.04;
 
   // 4) build arms
   let arms = `<g id="arms">`;

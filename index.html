@@ -67,6 +67,14 @@
       <div id="stage" aria-live="polite"></div>
     </div>
 
+    <div id="finalWrap">
+      <div class="aside-title"><h3>Final Phil Preview</h3></div>
+      <div id="finalPreview" aria-live="polite"
+          style="background:#050505; border:1px solid var(--line); border-radius:12px; padding:10px;
+                  display:flex; align-items:center; justify-content:center; overflow:hidden; height:420px;">
+      </div>
+    </div>
+
     <aside>
       <div>
         <div class="aside-title"><h3>Generate per trait</h3></div>
@@ -178,7 +186,7 @@
           e.preventDefault();
           const a = document.createElement('a');
           a.href = url;
-          a.download = `phil-${trait}.svg`;   <!-- ✅ FIXED -->
+          a.download = `phil-${trait}.svg`;   // fixed
           document.body.appendChild(a);
           a.click();
           a.remove();
@@ -188,11 +196,33 @@
       card.querySelector('img').src = url;
     }
 
-    // Receive optimized single-trait SVGs from app.js
+const finalPreview = document.getElementById('finalPreview');
+const savedSvgs = {}; // cache saved trait svgs by id
+
+    function rebuildFinalPhil() {
+      const orderedIds = ['bg','wings','phil','spikes','eyes','nose','teeth','top'];
+      const hrefs = [];
+      for (const id of orderedIds) {
+        if (savedSvgs[id]) {
+          const encoded = btoa(unescape(encodeURIComponent(savedSvgs[id])));
+          hrefs.push(`<image href="data:image/svg+xml;base64,${encoded}" x="0" y="0" width="420" height="420"/>`);
+        }
+      }
+      if (hrefs.length) {
+        finalPreview.innerHTML =
+          `<svg xmlns="http://www.w3.org/2000/svg" width="420" height="420" viewBox="0 0 420 420">${hrefs.join('')}</svg>`;
+      } else {
+        finalPreview.innerHTML = '';
+      }
+    }
+
+    // When receiving a per-trait svg, update the grid AND the final composite
     window.addEventListener('message', (e) => {
       const msg = e.data || {};
       if (msg && msg.source === 'createPhil' && msg.kind === 'preview-layer' && msg.trait && msg.svg) {
         upsertThumb(msg.trait, msg.svg);
+        savedSvgs[msg.trait] = msg.svg;   // cache
+        rebuildFinalPhil();               // update full preview
       }
     });
   </script>

@@ -203,10 +203,12 @@ function addBackgroundStars(num, color) {
 }
 
 function addGalaxyCore(coreColor) {
-  const r = round(WIDTH * 0.42); // keep your original size; change to 0.32 if you want it smaller
+  const r = 134;
+
   return `
     <defs>
-      <radialGradient id="coreGlow">
+      <radialGradient id="coreGlow" gradientUnits="userSpaceOnUse"
+        cx="${WIDTH/2}" cy="${HEIGHT/2}" r="${r}">
         <stop offset="0"   stop-color="${coreColor}" stop-opacity="0.6"/>
         <stop offset="0.5" stop-color="${coreColor}" stop-opacity="0.3"/>
         <stop offset="1"   stop-color="${coreColor}" stop-opacity="0"/>
@@ -217,7 +219,6 @@ function addGalaxyCore(coreColor) {
     </g>
   `;
 }
-
 // ---------- main ----------
 export function generateTrait() {
   // 1) choose a palette

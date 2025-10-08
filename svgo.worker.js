@@ -3,7 +3,7 @@
 // Uses the browser build of SVGO via importScripts (classic worker).
 
 // Pick one CDN; unpkg shown here:
-importScripts('https://unpkg.com/svgo@3.0.2/dist/svgo.browser.js');
+importScripts('./vendor/svgo.browser.js');
 
 const svgoConfig = {
   multipass: true,

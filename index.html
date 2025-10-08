@@ -6,16 +6,12 @@
   <title>createPhil</title>
   <meta name="theme-color" content="#000000">
   <style>
-    :root {
-      --panel:#0b0b0b; --ink:#e5ffe9; --accent:#9bffb0; --line:#1b3b24;
-    }
+    :root { --panel:#0b0b0b; --ink:#e5ffe9; --accent:#9bffb0; --line:#1b3b24; }
     *{box-sizing:border-box}
     html,body{height:100%}
-    body{
-      margin:0;background:#000;color:#fff;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
-    }
+    body{ margin:0;background:#000;color:#fff;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif; }
     .layout{
-      display:grid; grid-template-columns: 1fr 360px; grid-template-rows:auto 1fr; gap:12px;
+      display:grid; grid-template-columns: 1fr 380px; grid-template-rows:auto 1fr auto; gap:12px;
       height:100vh; padding:12px;
     }
     header{
@@ -34,33 +30,36 @@
     #stage svg{max-width:100%; height:auto; display:block}
     aside{
       background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:10px; overflow:auto;
+      display:flex; flex-direction:column; gap:10px;
     }
-    .aside-title{display:flex; align-items:center; justify-content:space-between; margin-bottom:8px}
+    .aside-title{display:flex; align-items:center; justify-content:space-between; margin-bottom:4px}
     .aside-title h3{margin:0; font-size:16px; color:var(--accent)}
-    #previewGrid{
-      display:grid; grid-template-columns: repeat(2, 1fr); gap:8px;
+    .row{display:flex; gap:6px; flex-wrap:wrap}
+    .row button{flex:1; min-width:110px}
+    fieldset{
+      border:1px dashed var(--line); border-radius:10px; padding:8px; margin:0;
     }
-    .thumb{
-      border:1px solid var(--line); border-radius:10px; padding:6px; background:#0a0a0a;
-    }
+    fieldset legend{color:#bfecc8; font-size:12px; padding:0 6px}
+    .layers{display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:6px; font-size:13px}
+    .layers label{display:flex; align-items:center; gap:6px; background:#0a0a0a; border:1px solid var(--line); border-radius:8px; padding:6px}
+    #previewGrid{ display:grid; grid-template-columns: repeat(2, 1fr); gap:8px; }
+    .thumb{ border:1px solid var(--line); border-radius:10px; padding:6px; background:#0a0a0a; }
     .thumb img{width:100%; height:auto; display:block; border-radius:6px; background:#000}
     .thumb .meta{display:flex; justify-content:space-between; align-items:center; margin-top:6px; font-size:12px; color:#bfecc8}
-    .row{display:flex; gap:6px; flex-wrap:wrap}
-    .row button{flex:1}
     #log{
       margin:0; white-space:pre; font:12px/1.25 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
       color:#9bffb0; background:#06140b; border:1px dashed var(--line); padding:8px; border-radius:8px;
-      height:96px; overflow:auto; grid-column:1 / -1;
+      height:120px; overflow:auto; grid-column:1 / -1;
     }
   </style>
 </head>
 <body>
   <div class="layout">
     <header>
-      <button id="generateBtn">Generate</button>
-      <button id="saveBtn" disabled>Save SVG</button>
+      <button id="generateBtn" type="button">Generate</button>
+      <button id="saveBtn" type="button" disabled>Save SVG</button>
       <!-- Export PNG is created programmatically by app.js (id: savePngBtn) -->
-      <button id="clearBtn">Clear</button>
+      <button id="clearBtn" type="button">Clear</button>
       <span style="margin-left:auto; color:#9bffb0; font-weight:600">createPhil</span>
     </header>
 
@@ -69,29 +68,139 @@
     </div>
 
     <aside>
-      <div class="aside-title">
-        <h3>Preview & Saved Traits</h3>
+      <div>
+        <div class="aside-title"><h3>Generate per trait</h3></div>
+        <div class="row" id="genRow">
+          <button type="button" data-gen="bg">Generate Bg</button>
+          <button type="button" data-gen="wings">Generate Wings</button>
+          <button type="button" data-gen="phil">Generate Phil</button>
+          <button type="button" data-gen="spikes">Generate Spikes</button>
+          <button type="button" data-gen="eyes">Generate Eyes</button>
+          <button type="button" data-gen="nose">Generate Nose</button>
+          <button type="button" data-gen="teeth">Generate Teeth</button>
+          <button type="button" data-gen="top">Generate Top</button>
+        </div>
       </div>
 
-      <!-- Save buttons for each trait -->
-      <div class="row" style="margin-bottom:8px">
-        <button id="saveBgBtn"     type="button">Save Bg</button>
-        <button id="saveWingsBtn"  type="button">Save Wings</button>
-        <button id="savePhilBtn"   type="button">Save Phil</button>
-        <button id="saveSpikesBtn" type="button">Save Spikes</button>
-        <button id="saveEyesBtn"   type="button">Save Eyes</button>
-        <button id="saveNoseBtn"   type="button">Save Nose</button>
-        <button id="saveTeethBtn"  type="button">Save Teeth</button>
-        <button id="saveTopBtn"    type="button">Save Top</button>
+      <div>
+        <div class="aside-title"><h3>Save per trait</h3></div>
+        <div class="row" id="saveRow">
+          <button id="saveBgBtn"     type="button" data-save="bg">Save Bg</button>
+          <button id="saveWingsBtn"  type="button" data-save="wings">Save Wings</button>
+          <button id="savePhilBtn"   type="button" data-save="phil">Save Phil</button>
+          <button id="saveSpikesBtn" type="button" data-save="spikes">Save Spikes</button>
+          <button id="saveEyesBtn"   type="button" data-save="eyes">Save Eyes</button>
+          <button id="saveNoseBtn"   type="button" data-save="nose">Save Nose</button>
+          <button id="saveTeethBtn"  type="button" data-save="teeth">Save Teeth</button>
+          <button id="saveTopBtn"    type="button" data-save="top">Save Top</button>
+        </div>
       </div>
 
-      <!-- Preview thumbnails appear here -->
-      <div id="previewGrid" aria-live="polite"></div>
+      <fieldset>
+        <legend>Layers for composite “Generate”</legend>
+        <form id="layerForm" class="layers">
+          <!-- Keep canonical z-order: bg → wings → phil → spikes → eyes → nose → teeth → top -->
+          <label><input type="checkbox" name="layer" value="bg"> Background</label>
+          <label><input type="checkbox" name="layer" value="wings"> Wings</label>
+          <label><input type="checkbox" name="layer" value="phil"> Phil</label>
+          <label><input type="checkbox" name="layer" value="spikes"> Spikes</label>
+          <label><input type="checkbox" name="layer" value="eyes"> Eyes</label>
+          <label><input type="checkbox" name="layer" value="nose"> Nose</label>
+          <label><input type="checkbox" name="layer" value="teeth"> Teeth</label>
+          <label><input type="checkbox" name="layer" value="top"> Top</label>
+        </form>
+      </fieldset>
+
+      <div>
+        <div class="aside-title"><h3>Preview & Saved Traits</h3></div>
+        <div id="previewGrid" aria-live="polite"></div>
+      </div>
     </aside>
 
     <pre id="log"></pre>
   </div>
 
+  <!-- ClipperLib for Phil (needed by philTrait.js) -->
+  <script src="https://unpkg.com/clipper-lib@6.4.2/clipper.js"></script>
+
+  <!-- App -->
   <script type="module" src="./app.js"></script>
+
+  <!-- Page wiring: per-trait generate/save and preview rendering -->
+  <script>
+    // Send commands into app.js (it listens for {source:'parent', kind:'generate'|'save', trait})
+    function sendToApp(kind, trait){
+      window.postMessage({ source:'parent', kind, trait }, '*');
+    }
+
+    // Wire Generate buttons
+    document.getElementById('genRow').addEventListener('click', (e)=>{
+      const t = e.target.closest('[data-gen]')?.getAttribute('data-gen');
+      if (t) sendToApp('generate', t);
+    });
+
+    // Wire Save buttons
+    document.getElementById('saveRow').addEventListener('click', (e)=>{
+      const t = e.target.closest('[data-save]')?.getAttribute('data-save');
+      if (t) sendToApp('save', t);
+    });
+
+    // Preview grid management
+    const previewGrid = document.getElementById('previewGrid');
+    const traitNames = {
+      bg:'Background', wings:'Wings', phil:'Phil', spikes:'Spikes',
+      eyes:'Eyes', nose:'Nose', teeth:'Teeth', top:'Top'
+    };
+
+    function svgToDataUrl(svg){
+      return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
+    }
+
+    function upsertThumb(trait, svg) {
+      const id = 'thumb-' + trait;
+      let card = document.getElementById(id);
+      const url = svgToDataUrl(svg);
+
+      if (!card) {
+        card = document.createElement('div');
+        card.className = 'thumb';
+        card.id = id;
+        card.innerHTML = `
+          <img alt="${traitNames[trait] || trait}" />
+          <div class="meta">
+            <span>${traitNames[trait] || trait}</span>
+            <a href="#" data-dl>Download</a>
+          </div>`;
+        previewGrid.appendChild(card);
+
+        card.querySelector('[data-dl]').addEventListener('click', (e) => {
+          e.preventDefault();
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `phil-${trait}.svg`;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+        });
+      }
+
+      const img = card.querySelector('img');
+      img.src = url;
+    }
+
+    // Receive optimized single-trait SVGs from app.js
+    window.addEventListener('message', (e) => {
+      const msg = e.data || {};
+      if (
+        msg &&
+        msg.source === 'createPhil' &&
+        msg.kind === 'preview-layer' &&
+        msg.trait &&
+        msg.svg
+      ) {
+        upsertThumb(msg.trait, msg.svg);
+      }
+    });
+  </script>
 </body>
 </html>

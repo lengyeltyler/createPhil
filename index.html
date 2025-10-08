@@ -8,7 +8,7 @@
   <style>
     :root {
       --panel:#0b0b0b; --ink:#e5ffe9; --accent:#9bffb0; --line:#1b3b24;
-      --thumb: 180px; /* 👈 smaller thumbnail size */
+      --thumb: 180px; /* smaller thumbnail size */
     }
     *{box-sizing:border-box}
     html,body{height:100%}
@@ -21,11 +21,12 @@
       grid-column:1 / -1; display:flex; align-items:center; gap:8px;
       background:var(--panel); border:1px solid var(--line); padding:8px 10px; border-radius:10px;
     }
-    header button{
+    header button, header a.link{
       background:#0f1a12; color:var(--ink); border:1px solid var(--line);
-      padding:8px 12px; border-radius:8px; cursor:pointer; font-weight:600;
+      padding:8px 12px; border-radius:8px; cursor:pointer; font-weight:600; text-decoration:none;
     }
     header button:disabled{opacity:.5; cursor:not-allowed}
+    header a.link:hover{filter:brightness(1.08)}
     #stageWrap{
       background:#050505; border:1px solid var(--line); border-radius:12px; padding:10px;
       display:flex; align-items:center; justify-content:center; overflow:hidden;
@@ -34,11 +35,6 @@
 
     /* Final Phil area */
     #finalWrap { margin-top: 12px; }
-    #finalControls{ display:flex; gap:8px; margin-bottom:6px; }
-    #finalControls button{
-      background:#0f1a12; color:var(--ink); border:1px solid var(--line);
-      padding:6px 10px; border-radius:8px; cursor:pointer; font-weight:600; font-size:13px;
-    }
     #finalPreview{
       background:#050505; border:1px solid var(--line); border-radius:12px; padding:10px;
       display:flex; align-items:center; justify-content:center; overflow:hidden; height:420px;
@@ -90,7 +86,12 @@
       <button id="saveBtn" type="button" disabled>Save SVG</button>
       <!-- Export PNG is created programmatically by app.js (id: savePngBtn) -->
       <button id="clearBtn" type="button">Clear</button>
-      <span style="margin-left:auto; color:#9bffb0; font-weight:600">createPhil</span>
+
+      <span style="margin-left:auto;"></span>
+      <!-- SVG Editor link -->
+      <a class="link" href="/svg-editor/" target="_blank" rel="noopener">SVG Editor</a>
+
+      <span style="color:#9bffb0; font-weight:600">createPhil</span>
     </header>
 
     <div id="stageWrap">
@@ -100,10 +101,24 @@
     <!-- Final Phil block (under the main stage, full width left column) -->
     <div id="finalWrap">
       <div class="aside-title"><h3>Final Phil Preview</h3></div>
-      <div id="finalControls">
-        <button id="saveFinalBtn" type="button">Save Final Phil (SVG)</button>
-        <button id="resetFinalBtn" type="button">Reset Final Phil</button>
+      <div class="row" style="margin:8px 0">
+        <button id="saveFinalVectorBtn" type="button">Save Final (Vector SVG)</button>
+        <button id="saveFinalBase64Btn" type="button">Save Final (Base64 SVG)</button>
+        <button id="resetFinalBtn" type="button">Reset Final</button>
       </div>
+
+      <!-- Per-trait reset row -->
+      <div class="row" id="resetTraitRow" style="margin:0 0 8px 0">
+        <button type="button" data-reset="bg"     title="Remove Background from Final">Reset Bg</button>
+        <button type="button" data-reset="wings"  title="Remove Wings from Final">Reset Wings</button>
+        <button type="button" data-reset="phil"   title="Remove Phil from Final">Reset Phil</button>
+        <button type="button" data-reset="spikes" title="Remove Spikes from Final">Reset Spikes</button>
+        <button type="button" data-reset="eyes"   title="Remove Eyes from Final">Reset Eyes</button>
+        <button type="button" data-reset="nose"   title="Remove Nose from Final">Reset Nose</button>
+        <button type="button" data-reset="teeth"  title="Remove Teeth from Final">Reset Teeth</button>
+        <button type="button" data-reset="top"    title="Remove Top from Final">Reset Top</button>
+      </div>
+
       <div id="finalPreview" aria-live="polite"></div>
     </div>
 
@@ -196,87 +211,148 @@
       return 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
     }
 
-    function upsertThumb(trait, svg) {
-      if (!previewGrid) return;
-      const id = 'thumb-' + trait;
-      let card = document.getElementById(id);
-      const url = svgToDataUrl(svg);
+  function upsertThumb(trait, svg) {
+    if (!previewGrid) return;
+    const id = 'thumb-' + trait;
+    let card = document.getElementById(id);
+    const url = svgToDataUrl(svg);
 
-      if (!card) {
-        card = document.createElement('div');
-        card.className = 'thumb';
-        card.id = id;
-        card.innerHTML = `
-          <img alt="${traitNames[trait] || trait}" />
-          <div class="meta">
-            <span>${traitNames[trait] || trait}</span>
-            <a href="#" data-dl>Download</a>
-          </div>`;
-        previewGrid.appendChild(card);
+    if (!card) {
+      card = document.createElement('div');
+      card.className = 'thumb';
+      card.id = id;
+      card.innerHTML = `
+        <img alt="${traitNames[trait] || trait}" />
+        <div class="meta">
+          <span>${traitNames[trait] || trait}</span>
+          <a href="#" data-dl>Download</a>
+        </div>`;
+      previewGrid.appendChild(card);
 
-        card.querySelector('[data-dl]').addEventListener('click', (e) => {
-          e.preventDefault();
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = `phil-${trait}.svg`;   <!-- template literal, no escapes -->
-          document.body.appendChild(a);
-          a.click();
-          a.remove();
-        });
-      }
-
-      card.querySelector('img').src = url;
+      card.querySelector('[data-dl]').addEventListener('click', (e) => {
+        e.preventDefault();
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `phil-${trait}.svg`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      });
     }
 
-    // ---- Final Phil compose/save/reset ----
-    const finalPreview = document.getElementById('finalPreview');
-    const savedSvgs = {}; // cache saved trait svgs by id
+    card.querySelector('img').src = url;
+  }
 
-    function buildFinalPhilSVG(){
-      const orderedIds = ['bg','wings','phil','spikes','eyes','nose','teeth','top'];
-      const images = [];
-      for (const id of orderedIds) {
-        if (savedSvgs[id]) {
-          const encoded = btoa(unescape(encodeURIComponent(savedSvgs[id])));
-          images.push(`<image href="data:image/svg+xml;base64,${encoded}" x="0" y="0" width="420" height="420"/>`);
-        }
+  // ---- Final Phil compose/save/reset ----
+  const finalPreview = document.getElementById('finalPreview');
+  const savedSvgs = {}; // cache saved trait svgs by id (from per-trait saves)
+
+  // Base64-image layering (what we preview in the box)
+  function buildFinalPhilBase64SVG(){
+    const orderedIds = ['bg','wings','phil','spikes','eyes','nose','teeth','top'];
+    const images = [];
+    for (const id of orderedIds) {
+      if (savedSvgs[id]) {
+        const encoded = btoa(unescape(encodeURIComponent(savedSvgs[id])));
+        images.push(`<image href="data:image/svg+xml;base64,${encoded}" x="0" y="0" width="420" height="420"/>`);
       }
-      return `<svg xmlns="http://www.w3.org/2000/svg" width="420" height="420" viewBox="0 0 420 420">${images.join('')}</svg>`;
     }
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="420" height="420" viewBox="0 0 420 420">${images.join('')}</svg>`;
+  }
 
-    function rebuildFinalPhil() {
-      const any = Object.keys(savedSvgs).length > 0;
-      finalPreview.innerHTML = any ? buildFinalPhilSVG() : '';
+  // Utilities to preserve vectors safely by prefixing IDs + references
+  function prefixSVGIds(svg, prefix){
+    const ids = new Set();
+    svg.replace(/id="([^"]+)"/g, (_m, id) => { ids.add(id); return _m; });
+    if (!ids.size) return svg;
+
+    // Escape for safe regex usage
+    const esc = (s) => s.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
+
+    // 1) prefix id="..."
+    let out = svg.replace(/id="([^"]+)"/g, (_m, id) => `id="${prefix}${id}"`);
+
+    // 2) fix url(#...) and href="#..."
+    ids.forEach((id)=>{
+      // url(#id)
+      const reUrl = new RegExp(`url\$begin:math:text$#${esc(id)}\\$end:math:text$`, 'g');
+      out = out.replace(reUrl, `url(#${prefix}${id})`);
+      // href / xlink:href
+      const reHref = new RegExp(`([\"\\s])(href|xlink:href)=["']#${esc(id)}["']`, 'g');
+      out = out.replace(reHref, (_m2, lead, attr) => `${lead}${attr}="#${prefix}${id}"`);
+    });
+
+    return out;
+  }
+
+  function stripOuterSvg(svg){
+    const m = svg.match(/<svg[^>]*>([\s\S]*?)<\/svg>/i);
+    return m ? m[1] : svg; // if no outer svg tag, return as-is
+  }
+
+  // Vector-preserving composite (inline all traits)
+  function buildFinalPhilVectorSVG(){
+    const orderedIds = ['bg','wings','phil','spikes','eyes','nose','teeth','top'];
+    const chunks = [];
+    for (const id of orderedIds) {
+      if (!savedSvgs[id]) continue;
+      const prefixed = prefixSVGIds(savedSvgs[id], `${id}-`);
+      const inner = stripOuterSvg(prefixed);
+      chunks.push(`<g id="layer-${id}">${inner}</g>`);
     }
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="420" height="420" viewBox="0 0 420 420">${chunks.join('')}</svg>`;
+  }
 
-    document.getElementById('saveFinalBtn').addEventListener('click', () => {
-      const any = Object.keys(savedSvgs).length > 0;
-      if (!any) return;
-      const svg = buildFinalPhilSVG();
-      const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
-      const url  = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'final-phil.svg';
-      document.body.appendChild(a);
-      a.click();
-      setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 0);
-    });
+  function rebuildFinalPhil() {
+    const any = Object.keys(savedSvgs).length > 0;
+    finalPreview.innerHTML = any ? buildFinalPhilBase64SVG() : '';
+  }
 
-    document.getElementById('resetFinalBtn').addEventListener('click', () => {
-      for (const k in savedSvgs) delete savedSvgs[k];
-      finalPreview.innerHTML = '';
-    });
+  // Save buttons (vector + base64)
+  document.getElementById('saveFinalVectorBtn').addEventListener('click', () => {
+    if (!Object.keys(savedSvgs).length) return;
+    const svg = buildFinalPhilVectorSVG();
+    const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
+    const url  = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'final-phil-vector.svg';
+    document.body.appendChild(a); a.click();
+    setTimeout(()=>{ URL.revokeObjectURL(url); a.remove(); }, 0);
+  });
 
-    // When receiving a per-trait svg, update the grid AND the final composite
-    window.addEventListener('message', (e) => {
-      const msg = e.data || {};
-      if (msg && msg.source === 'createPhil' && msg.kind === 'preview-layer' && msg.trait && msg.svg) {
-        upsertThumb(msg.trait, msg.svg);
-        savedSvgs[msg.trait] = msg.svg;  // cache
-        rebuildFinalPhil();              // update full preview
-      }
-    });
+  document.getElementById('saveFinalBase64Btn').addEventListener('click', () => {
+    if (!Object.keys(savedSvgs).length) return;
+    const svg = buildFinalPhilBase64SVG();
+    const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
+    const url  = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'final-phil-base64.svg';
+    document.body.appendChild(a); a.click();
+    setTimeout(()=>{ URL.revokeObjectURL(url); a.remove(); }, 0);
+  });
+
+  document.getElementById('resetFinalBtn').addEventListener('click', () => {
+    for (const k in savedSvgs) delete savedSvgs[k];
+    finalPreview.innerHTML = '';
+  });
+
+  // Per-trait reset for Final Phil only (thumbnails remain)
+  document.getElementById('resetTraitRow').addEventListener('click', (e)=>{
+    const t = e.target.closest('[data-reset]')?.getAttribute('data-reset');
+    if (!t) return;
+    delete savedSvgs[t];    // remove that trait from the composite
+    rebuildFinalPhil();     // update full preview
+  });
+
+  // When receiving a per-trait svg, update the grid AND the final composite
+  window.addEventListener('message', (e) => {
+    const msg = e.data || {};
+    if (msg && msg.source === 'createPhil' && msg.kind === 'preview-layer' && msg.trait && msg.svg) {
+      upsertThumb(msg.trait, msg.svg);
+      savedSvgs[msg.trait] = msg.svg;  // cache
+      rebuildFinalPhil();              // update full preview
+    }
+  });
   </script>
 </body>
 </html>

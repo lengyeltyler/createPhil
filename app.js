@@ -111,18 +111,13 @@ async function importTrait(id) {
 
 // Safely post a single-trait SVG to the preview panel (works embedded or standalone)
 function postToParentPreview(trait, svg) {
-  try {
-    const target = (window.top && window.top.postMessage) ? window.top : window;
-    target.postMessage({
-      source: 'createPhil',
-      kind: 'preview-layer',
-      trait,   // e.g., 'bg', 'wings', ...
-      svg
-    }, '*');
-    log(`› Sent ${trait} to parent preview.`);
-  } catch (err) {
-    console.warn('postMessage(preview-layer) failed:', err);
-  }
+  const msg = { source: 'createPhil', kind: 'preview-layer', trait, svg };
+
+  try { window.postMessage(msg, '*'); } catch (e) {}
+  try { if (window.parent && window.parent !== window) window.parent.postMessage(msg, '*'); } catch (e) {}
+  try { if (window.top && window.top !== window && window.top !== window.parent) window.top.postMessage(msg, '*'); } catch (e) {}
+
+  log(`› Sent ${trait} to parent preview.`);
 }
 
 // --------------------------

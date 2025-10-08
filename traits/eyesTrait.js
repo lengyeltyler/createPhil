@@ -51,19 +51,19 @@ async function fetchJSON(url) {
 
 // ---------- palettes: [bright, darkA, darkB] ----------
 const PALETTES = [
-  ["#ffffffff", "#3a8bff", "#2c2f73"],   // 1 bright white, blue, deep indigo
-  ["#000000ff", "#7c2d12", "#1f2937"],   // 2 warm bright, rust, slate
-  ["#94dfffff", "#06b6d4", "#0e7490"],   // 3 cool gray, cyan, teal
-  ["#b9e9ffff", "#7dd3fc", "#1f2a44"],   // 4 cream, sky, navy
-  ["#ffb0bcff", "#fb7185", "#7c2040"],   // 5 peach, rose, wine
-  ["#110043ff", "#a78bfa", "#845cfcff"],   // 6 gray, purple, indigo
-  ["#fef9c3", "#34d399", "#065f46"],   // 7 lemon, green, pine
-  ["#fafaf9", "#f97316", "#7c2d12"],   // 8 offwhite, orange, rust
-  ["#fdf2f8", "#22d3ee", "#155e75"],   // 9 pinkish, cyan, petrol
-  ["#fff1f2", "#f472b6", "#831843"],   // 10 blush, pink, plum
-  ["#8effb0ff", "#10b981", "#064e3b"],   // 11 mint, emerald, forest
-  ["#52708eff", "#60a5fa", "#1e3a8a"],   // 12 cool gray, blue, deep blue
-  ["#ffffffff", "#ef4444", "#1f2937"],   // 13 gold, red, slate
+  ["#08090A", "#A7A2A9", "#F4F7F5"],
+  ["#00ffffff", "#EEE4E1", "#E7D8C9"],
+  ["#F79D5C", "#F52F57", "#A20021"],
+  ["#E3EBFF", "#ECE8EF", "#4392F1"],
+  ["#845A6D", "#3E1929", "#6E75A8"],
+  ["#DAFFED", "#9BF3F0", "#473198"],
+  ["#655A7C", "#AB92BF", "#AFC1D6"],
+  ["#454851", "#73956F", "#7BAE7F"],
+  ["#95F9E3", "#69EBD0", "#49D49D"],
+  ["#463730", "#1F5673", "#759FBC"],
+  ["#FFBC42", "#D81159", "#8F2D56"],
+  ["#F1DAC4", "#A69CAC", "#474973"],
+  ["#C4BBB8", "#F5B0CB", "#DC6ACF"],   
 ];
 
 // ---------- spiral styles ----------

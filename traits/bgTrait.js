@@ -166,17 +166,11 @@ function generateArmPoints({cx, cy, armIndex, totalArms, type, points, maxRadius
 
 // ---------- SVG builders (defs/use for size) ----------
 function buildDefs() {
-  // A single dot symbol reused everywhere
   return `
     <defs>
       <symbol id="d" overflow="visible">
         <circle cx="0" cy="0" r="1"></circle>
       </symbol>
-      <radialGradient id="coreGlow">
-        <stop offset="0" stop-opacity="0.65"/>
-        <stop offset="0.55" stop-opacity="0.28"/>
-        <stop offset="1" stop-opacity="0"/>
-      </radialGradient>
     </defs>
   `;
 }
@@ -209,12 +203,17 @@ function addBackgroundStars(num, color) {
 }
 
 function addGalaxyCore(coreColor) {
+  const r = round(WIDTH * 0.42); // keep your original size; change to 0.32 if you want it smaller
   return `
+    <defs>
+      <radialGradient id="coreGlow">
+        <stop offset="0"   stop-color="${coreColor}" stop-opacity="0.6"/>
+        <stop offset="0.5" stop-color="${coreColor}" stop-opacity="0.3"/>
+        <stop offset="1"   stop-color="${coreColor}" stop-opacity="0"/>
+      </radialGradient>
+    </defs>
     <g id="core">
-      <circle cx="${WIDTH/2}" cy="${HEIGHT/2}" r="${round(WIDTH*0.42)}"
-        fill="${coreColor}" opacity="0.08"/>
-      <circle cx="${WIDTH/2}" cy="${HEIGHT/2}" r="${round(WIDTH*0.42)}"
-        fill="url(#coreGlow)" />
+      <circle cx="${WIDTH/2}" cy="${HEIGHT/2}" r="${r}" fill="url(#coreGlow)"/>
     </g>
   `;
 }

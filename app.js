@@ -144,18 +144,47 @@ async function save() {
 
   let finalSVG = lastSVG;
   try {
-    // Full SVGO optimization in a Worker (non-blocking)
-    finalSVG = await optimizeSVG(lastSVG);
+    finalSVG = await optimizeSVG(lastSVG);   // SVGO in worker
   } catch (e) {
     console.warn('SVGO optimize failed; falling back to raw SVG:', e);
   }
 
-  const blob = new Blob([finalSVG], { type: 'image/svg+xml;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = 'phil.svg';
-  document.body.appendChild(a); a.click();
-  setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 0);
+  // Try direct download first (works when you open createPhil directly)
+  const ok = directDownload('phil.svg', finalSVG);
+  if (ok) return;
+
+  // Fallback: send to parent page to download top-level
+  try {
+    if (window.top && window.top !== window) {
+      window.top.postMessage({
+        source: 'createPhil',
+        kind: 'download-svg',
+        filename: 'phil.svg',
+        mime: 'image/svg+xml;charset=utf-8',
+        data: finalSVG
+      }, '*');
+    }
+  } catch (e) {
+    console.warn('postMessage to parent failed:', e);
+  }
+}
+
+function directDownload(filename, dataStr, mime='image/svg+xml;charset=utf-8') {
+  try {
+    const blob = new Blob([dataStr], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.rel = 'noopener';
+    // Some browsers need the link in DOM
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 0);
+    return true;
+  } catch (_) {
+    return false;
+  }
 }
 
 // --- NEW: High-res PNG export ---

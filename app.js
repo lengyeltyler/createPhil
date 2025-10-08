@@ -1,9 +1,3 @@
-// public/app.js
-// Orchestrator for compositing trait SVGs without touching trait code.
-// - Z-order is enforced by the canonical LAYERS array (not checkbox order).
-// - Each trait SVG is embedded as a data: URL <image> to avoid ID collisions.
-// - Optional Service Worker keeps /traits_json fetches working under subpaths.
-
 import { optimizeSVG } from './svgoClient.js';
 
 const W = 420, H = 420;
@@ -67,7 +61,7 @@ function log(msg){ if (!logEl) return; logEl.textContent += (msg + "\n"); logEl.
 function clearLog(){ if (!logEl) return; logEl.textContent = ''; }
 
 function getSelectedIdsSet() {
-  if (!form) return new Set();
+  if (!form) return new Set(LAYERS.map(l => l.id)); // if no form, assume all layers
   return new Set(
     Array.from(form.querySelectorAll('input[name="layer"]:checked'))
       .map(i => i.value)
@@ -91,6 +85,55 @@ let lastSVG = '';            // composite wrapper used for preview
 let lastInlineSVG = '';      // raw trait SVG when exactly one trait selected
 let lastWasSingle = false;   // selection size at generation time
 
+// --- NEW: store per-layer hrefs for preview saving ---
+let lastLayerHrefsById = {}; // { layerId: dataHref }
+
+// --- NEW: preview persistence helpers ---
+const PREVIEW_KEY = 'phil.saved.preview.v1';
+
+function loadSaved() {
+  try { return JSON.parse(localStorage.getItem(PREVIEW_KEY) || '[]'); }
+  catch { return []; }
+}
+function saveSaved(arr) {
+  try { localStorage.setItem(PREVIEW_KEY, JSON.stringify(arr)); } catch {}
+}
+function addThumb({ layerId, href }) {
+  const grid = document.getElementById('previewGrid');
+  if (!grid) return;
+  const wrap = document.createElement('div');
+  wrap.className = 'thumb';
+  wrap.innerHTML = `
+    <img alt="${layerId} preview" loading="lazy">
+    <div class="meta">
+      <span>${layerId}</span>
+      <button type="button" style="background:#111;color:#bfecc8;border:1px solid #1b3b24;border-radius:6px;padding:2px 6px">Remove</button>
+    </div>`;
+  wrap.querySelector('img').src = href;
+  wrap.querySelector('button').addEventListener('click', () => {
+    const all = loadSaved().filter(x => !(x.layerId === layerId && x.href === href));
+    saveSaved(all);
+    wrap.remove();
+  });
+  grid.prepend(wrap);
+}
+function hydratePreviewFromStorage() {
+  const grid = document.getElementById('previewGrid');
+  if (!grid) return;
+  grid.innerHTML = '';
+  loadSaved().forEach(addThumb);
+}
+function saveCurrentLayer(layerId) {
+  const href = lastLayerHrefsById[layerId];
+  if (!href) { log(`Nothing to save for "${layerId}" yet—generate first.`); return; }
+  const entry = { layerId, href };
+  const all = loadSaved();
+  all.push(entry);
+  saveSaved(all);
+  addThumb(entry);
+  log(`★ Saved ${layerId} to preview.`);
+}
+
 async function generate() {
   clearLog();
   if (genBtn) genBtn.disabled = true;
@@ -111,7 +154,8 @@ async function generate() {
   const orderedIds = LAYERS.map(l => l.id).filter(id => selected.has(id));
 
   const hrefs = [];
-  const svgs  = []; // NEW: keep raw trait SVG strings
+  const svgs  = []; // keep raw trait SVG strings
+  lastLayerHrefsById = {}; // reset per-layer refs
 
   for (const id of orderedIds) {
     const layer = LAYERS.find(l => l.id === id);
@@ -124,8 +168,12 @@ async function generate() {
         continue;
       }
       const svg = await mod.generateTrait(); // defaults keep each trait's internal style
-      svgs.push(svg);                        // NEW: store inline SVG
-      hrefs.push(svgToImageHref(svg));
+      const href = svgToImageHref(svg);
+
+      svgs.push(svg);
+      hrefs.push(href);
+      lastLayerHrefsById[id] = href; // remember per-layer for preview saving
+
       log(`✓ ${layer.name} generated.`);
     } catch (err) {
       log(`✗ ${layer.name} failed: ${err?.message || err}`);
@@ -138,7 +186,7 @@ async function generate() {
     return;
   }
 
-  // For preview we still show the composed wrapper as before
+  // For preview we show the composed wrapper
   lastSVG = compose(hrefs);
 
   // For saving: if exactly one trait, keep the inline version
@@ -154,7 +202,7 @@ async function generate() {
 async function save() {
   if (!lastSVG) return;
 
-  // Prefer the inline single-trait SVG (smaller, fully minified) when only one layer was selected
+  // Prefer the inline single-trait SVG when only one layer was selected
   const candidate = (lastWasSingle && lastInlineSVG) ? lastInlineSVG : lastSVG;
 
   let finalSVG = candidate;
@@ -164,7 +212,7 @@ async function save() {
     console.warn('SVGO optimize failed; falling back to raw SVG:', e);
   }
 
-  // Try direct download first (works when you open createPhil directly)
+  // Try direct download first
   const ok = directDownload('phil.svg', finalSVG);
   if (ok) return;
 
@@ -192,7 +240,6 @@ function directDownload(filename, dataStr, mime='image/svg+xml;charset=utf-8') {
     a.href = url;
     a.download = filename;
     a.rel = 'noopener';
-    // Some browsers need the link in DOM
     document.body.appendChild(a);
     a.click();
     setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 0);
@@ -202,14 +249,12 @@ function directDownload(filename, dataStr, mime='image/svg+xml;charset=utf-8') {
   }
 }
 
-// --- NEW: High-res PNG export ---
-// Default target is 3300x3300 px (crisp on US Letter/A4 when set to "Fit to page" in print dialogs).
+// --- High-res PNG export ---
 async function savePNG(targetPx) {
   if (!lastSVG) return;
-  const DEFAULT_SIZE = 3300; // ~11" at 300dpi; square to maximize printable area
+  const DEFAULT_SIZE = 3300; // ~11" at 300dpi
   const size = Number.isFinite(targetPx) && targetPx > 0 ? Math.floor(targetPx) : DEFAULT_SIZE;
 
-  // Ensure <svg> string has explicit viewBox (we already set that in compose)
   const svgStr = lastSVG;
 
   // Make an <img> from the SVG string
@@ -226,7 +271,6 @@ async function savePNG(targetPx) {
   canvas.height = size;
 
   const ctx = canvas.getContext('2d', { willReadFrequently: false });
-  // scale the square 420x420 to the target square
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
   ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
@@ -234,7 +278,7 @@ async function savePNG(targetPx) {
   // Download as PNG
   const link = document.createElement('a');
   link.download = 'phil.png';
-  link.href = canvas.toDataURL('image/png'); // lossless
+  link.href = canvas.toDataURL('image/png');
   document.body.appendChild(link);
   link.click();
   link.remove();
@@ -244,18 +288,19 @@ function clearStage(){
   lastSVG = '';
   lastInlineSVG = '';
   lastWasSingle = false;
+  lastLayerHrefsById = {};
   if (stage) stage.innerHTML = '';
   if (saveBtn) saveBtn.disabled = true;
   if (savePngBtn) savePngBtn.disabled = true;
   clearLog();
 }
 
+// --- Base controls ---
 genBtn?.addEventListener('click', generate);
 saveBtn?.addEventListener('click', () => { save(); });
 clearBtn?.addEventListener('click', clearStage);
 
-// --- NEW: hook up PNG export ---
-// Click = quick export at 3300px; Shift+Click prompts custom size.
+// --- PNG export: Click = 3300px; Shift+Click prompts custom size.
 savePngBtn?.addEventListener('click', (e) => {
   if (e.shiftKey) {
     const val = prompt('Export PNG size in pixels (square):', '3300');
@@ -265,3 +310,16 @@ savePngBtn?.addEventListener('click', (e) => {
     savePNG(3300);
   }
 });
+
+// --- NEW: Preview buttons wiring (works if the buttons exist in the page) ---
+document.getElementById('saveBgBtn')    ?.addEventListener('click', () => saveCurrentLayer('bg'));
+document.getElementById('saveWingsBtn') ?.addEventListener('click', () => saveCurrentLayer('wings'));
+document.getElementById('savePhilBtn')  ?.addEventListener('click', () => saveCurrentLayer('phil'));
+document.getElementById('saveSpikesBtn')?.addEventListener('click', () => saveCurrentLayer('spikes'));
+document.getElementById('saveEyesBtn')  ?.addEventListener('click', () => saveCurrentLayer('eyes'));
+document.getElementById('saveNoseBtn')  ?.addEventListener('click', () => saveCurrentLayer('nose'));
+document.getElementById('saveTeethBtn') ?.addEventListener('click', () => saveCurrentLayer('teeth'));
+document.getElementById('saveTopBtn')   ?.addEventListener('click', () => saveCurrentLayer('top'));
+
+// Hydrate existing saved previews (if the preview container exists)
+window.addEventListener('DOMContentLoaded', hydratePreviewFromStorage);

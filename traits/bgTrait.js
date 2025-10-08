@@ -155,9 +155,10 @@ function generateArmPoints({cx, cy, armIndex, totalArms, type, points, maxRadius
       case "lituus": { // Lituus: r = k / √θ (strong inward curl)
         const turns = 3.0;
         // walk backward so start is larger, end tighter near center
-        const theta = thetaStart + (1 - t) * turns * 2 * Math.PI + 0.001; // avoid div/0
-        const k = maxRadius * Math.sqrt(turns * 2 * Math.PI); // scale so t=0 yields ~maxRadius
-        const r = k / Math.sqrt(theta - thetaStart);
+        const theta = thetaStart + (1 - t) * turns * 2 * Math.PI + 1e-3; // avoid div/0
+        const k = maxRadius * Math.sqrt(turns * 2 * Math.PI); // r == maxRadius at t==0
+        const rRaw = k / Math.sqrt(theta - thetaStart);
+        const r = Math.min(rRaw, maxRadius); // clamp to stay within bounds
         x = cx + Math.cos(theta) * r;
         y = cy + Math.sin(theta) * r;
         break;
@@ -240,8 +241,16 @@ function addBackgroundStars(num, color) {
   return out;
 }
 
-function addGalaxyCore(coreColor) {
-  const r = 69; // fixed glow size you approved
+function addGalaxyCore(coreColor, rOverride) {
+  // gentle range; adjust to taste
+  const CORE_R_MIN = 69;
+  const CORE_R_MAX = 79;
+
+  // allow caller to force a radius (handy for testing), else randomize
+  const r = Math.round(
+    Number.isFinite(rOverride) ? rOverride : R(CORE_R_MIN, CORE_R_MAX)
+  );
+
   return `
     <defs>
       <radialGradient id="coreGlow" gradientUnits="userSpaceOnUse"

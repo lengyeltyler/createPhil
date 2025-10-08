@@ -3,54 +3,94 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>createPhil — Trait Playground</title>
-  <meta name="description" content="Generate Phil traits, layer them, and save as SVG." />
-  <link rel="stylesheet" href="./styles.css" />
-  <!-- ClipperLib (global) for traits that expect it -->
-  <script defer src="https://unpkg.com/clipper-lib@6.4.2/clipper.js"></script>
+  <title>createPhil</title>
+  <meta name="theme-color" content="#000000">
+  <style>
+    :root {
+      --panel:#0b0b0b; --ink:#e5ffe9; --accent:#9bffb0; --line:#1b3b24;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;background:#000;color:#fff;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+    }
+    .layout{
+      display:grid; grid-template-columns: 1fr 360px; grid-template-rows:auto 1fr; gap:12px;
+      height:100vh; padding:12px;
+    }
+    header{
+      grid-column:1 / -1; display:flex; align-items:center; gap:8px;
+      background:var(--panel); border:1px solid var(--line); padding:8px 10px; border-radius:10px;
+    }
+    header button{
+      background:#0f1a12; color:var(--ink); border:1px solid var(--line);
+      padding:8px 12px; border-radius:8px; cursor:pointer; font-weight:600;
+    }
+    header button:disabled{opacity:.5; cursor:not-allowed}
+    #stageWrap{
+      background:#050505; border:1px solid var(--line); border-radius:12px; padding:10px;
+      display:flex; align-items:center; justify-content:center; overflow:hidden;
+    }
+    #stage svg{max-width:100%; height:auto; display:block}
+    aside{
+      background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:10px; overflow:auto;
+    }
+    .aside-title{display:flex; align-items:center; justify-content:space-between; margin-bottom:8px}
+    .aside-title h3{margin:0; font-size:16px; color:var(--accent)}
+    #previewGrid{
+      display:grid; grid-template-columns: repeat(2, 1fr); gap:8px;
+    }
+    .thumb{
+      border:1px solid var(--line); border-radius:10px; padding:6px; background:#0a0a0a;
+    }
+    .thumb img{width:100%; height:auto; display:block; border-radius:6px; background:#000}
+    .thumb .meta{display:flex; justify-content:space-between; align-items:center; margin-top:6px; font-size:12px; color:#bfecc8}
+    .row{display:flex; gap:6px; flex-wrap:wrap}
+    .row button{flex:1}
+    #log{
+      margin:0; white-space:pre; font:12px/1.25 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+      color:#9bffb0; background:#06140b; border:1px dashed var(--line); padding:8px; border-radius:8px;
+      height:96px; overflow:auto; grid-column:1 / -1;
+    }
+  </style>
 </head>
 <body>
-  <header class="app-header">
-    <h1>createPhil</h1>
-    <p class="sub">Play with traits & build your own Phil. 420×420 SVG.</p>
-  </header>
+  <div class="layout">
+    <header>
+      <button id="generateBtn">Generate</button>
+      <button id="saveBtn" disabled>Save SVG</button>
+      <!-- Export PNG is created programmatically by app.js (id: savePngBtn) -->
+      <button id="clearBtn">Clear</button>
+      <span style="margin-left:auto; color:#9bffb0; font-weight:600">createPhil</span>
+    </header>
 
-  <main class="layout">
-    <section class="controls">
-      <h2>Layers</h2>
-      <form id="layerForm" class="layer-list">
-        <label><input type="checkbox" name="layer" value="bg" checked> Background</label>
-        <label><input type="checkbox" name="layer" value="phil" checked> Phil</label>
-        <label><input type="checkbox" name="layer" value="spikes"> Spikes</label>
-        <label><input type="checkbox" name="layer" value="wings"> Wings</label>
-        <label><input type="checkbox" name="layer" value="eyes" checked> Eyes</label>
-        <label><input type="checkbox" name="layer" value="nose" checked> Nose</label>
-        <label><input type="checkbox" name="layer" value="teeth" checked> Teeth</label>
-        <label><input type="checkbox" name="layer" value="top"> Top</label>
-      </form>
+    <div id="stageWrap">
+      <div id="stage" aria-live="polite"></div>
+    </div>
 
-      <div class="buttons">
-        <button id="generateBtn" class="primary">Generate</button>
-        <button id="saveBtn" class="secondary" disabled>Save SVG</button>
-        <button id="clearBtn" class="ghost">Clear</button>
+    <aside>
+      <div class="aside-title">
+        <h3>Preview & Saved Traits</h3>
       </div>
 
-      <details class="notes">
-        <summary>Notes</summary>
-        <ul>
-          <li>Your trait scripts & JSON go in <code>/traits</code> and <code>/traits_json</code>.</li>
-          <li>No changes to trait code needed; styles remain exactly the same.</li>
-          <li>We use a Service Worker to remap <code>/traits_json</code> paths when hosted under a subpath.</li>
-        </ul>
-      </details>
+      <!-- Save buttons for each trait -->
+      <div class="row" style="margin-bottom:8px">
+        <button id="saveBgBtn"     type="button">Save Bg</button>
+        <button id="saveWingsBtn"  type="button">Save Wings</button>
+        <button id="savePhilBtn"   type="button">Save Phil</button>
+        <button id="saveSpikesBtn" type="button">Save Spikes</button>
+        <button id="saveEyesBtn"   type="button">Save Eyes</button>
+        <button id="saveNoseBtn"   type="button">Save Nose</button>
+        <button id="saveTeethBtn"  type="button">Save Teeth</button>
+        <button id="saveTopBtn"    type="button">Save Top</button>
+      </div>
 
-      <pre id="log" class="log"></pre>
-    </section>
+      <!-- Preview thumbnails appear here -->
+      <div id="previewGrid" aria-live="polite"></div>
+    </aside>
 
-    <section class="preview">
-      <div id="stage" class="stage" aria-label="SVG preview area"></div>
-    </section>
-  </main>
+    <pre id="log"></pre>
+  </div>
 
   <script type="module" src="./app.js"></script>
 </body>

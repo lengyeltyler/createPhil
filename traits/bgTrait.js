@@ -17,12 +17,11 @@ const round = (n, d = 1) => Number(n.toFixed(d));
 const PALETTES = [
   // Your example from coolors.co
   { name: "coolors-1",
-    bg: "#011627", stars: "#FDFFFC", dust: "#41EAD4", armA: "#FF0022", armB: "#B91372", core: "#FDFFFC" },
-  // Two more to start (tweak anytime)
+    bg: "#FDFFFC", stars: "#41EAD4", dust: "#B91372", armA: "#FF0022", armB: "#B91372", core: "#011627" },
   { name: "atelier",
-    bg: "#0b0d10", stars: "#c8d1ff", dust: "#7cc5ff", armA: "#8b5cf6", armB: "#22d3ee", core: "#e0e7ff" },
+    bg: "#91C4F2", stars: "#8CA0D7", dust: "#9D79BC", armA: "#A14DA0", armB: "#7E1F86", core: "#e0e7ff" },
   { name: "sunset-mint",
-    bg: "#0f172a", stars: "#fef9c3", dust: "#86efac", armA: "#fb7185", armB: "#f97316", core: "#fde68a" },
+    bg: "#20BF55", stars: "#0B4F6C", dust: "#01BAEF", armA: "#FBFBFF", armB: "#757575", core: "#fde68a" },
 ];
 
 // For subtle variance within a role color

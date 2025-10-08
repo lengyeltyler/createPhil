@@ -85,67 +85,116 @@ function toPath(points) {
 function genSpiralPoints({ type, cx, cy, maxR, turns = 3.2, steps = 420 }) {
   const pts = [];
   const twoPiT = turns * 2 * Math.PI;
+
+  // helpers for trochoids
+  const normAndPush = (x, y, t) => {
+    // center already around (cx,cy); scale handled per-case
+    pts.push({ x, y, t });
+  };
+
   for (let i = 0; i < steps; i++) {
     const t = i / (steps - 1 || 1);
     const theta = t * twoPiT;
-    let r;
+
+    // Defaults for legacy styles
+    let r, x, y;
 
     switch (type) {
       case "log": {
         const a = 0.75;
         const b = Math.log(1 + maxR / a) / twoPiT;
         r = a * Math.exp(b * theta);
+        x = cx + Math.cos(theta) * r;
+        y = cy + Math.sin(theta) * r;
         break;
       }
-      case "tight": {
-        r = t * maxR * 0.85;
-        break;
-      }
-      case "loose": {
-        r = t * maxR * 1.15;
-        break;
-      }
+      case "tight": { r = t * maxR * 0.85; x = cx + Math.cos(theta)*r; y = cy + Math.sin(theta)*r; break; }
+      case "loose": { r = t * maxR * 1.15; x = cx + Math.cos(theta)*r; y = cy + Math.sin(theta)*r; break; }
       case "rose": {
-        const k = 5 + Math.floor(getSecureRandomNumber() * 4); // 5–8 lobes
+        const k = 5 + Math.floor(getSecureRandomNumber() * 4);
         const envelope = t * maxR * 1.05;
         r = envelope * (0.5 + 0.5 * Math.abs(Math.sin(k * theta)));
-        break;
+        x = cx + Math.cos(theta)*r; y = cy + Math.sin(theta)*r; break;
       }
-      case "sinewave": {
-        r = t * maxR * (1 + 0.12 * Math.sin(theta * 2.3));
-        break;
-      }
+      case "sinewave": { r = t * maxR * (1 + 0.12 * Math.sin(theta * 2.3)); x = cx + Math.cos(theta)*r; y = cy + Math.sin(theta)*r; break; }
       case "noisy": {
         const wob = 0.3 * Math.sin(t * 6.0) + 0.2 * Math.sin(t * 11.3);
         r = t * maxR * (1 + wob * 0.2);
-        break;
+        x = cx + Math.cos(theta)*r; y = cy + Math.sin(theta)*r; break;
       }
-      case "fermat": { // r ∝ √θ
+      case "fermat": {
         const c = maxR / Math.sqrt(twoPiT);
         r = c * Math.sqrt(theta);
-        break;
+        x = cx + Math.cos(theta)*r; y = cy + Math.sin(theta)*r; break;
       }
-      case "lituus": { // r ∝ 1/√θ (reverse)
+      case "lituus": {
         const eps = 1e-3;
         const k = maxR * Math.sqrt(twoPiT);
         const th = (1 - t) * twoPiT + eps;
         r = Math.min(k / Math.sqrt(th), maxR);
-        break;
+        x = cx + Math.cos(theta)*r; y = cy + Math.sin(theta)*r; break;
       }
-      case "arch": { // r ∝ θ
+      case "arch": {
         const k = maxR / twoPiT;
         r = k * theta;
+        x = cx + Math.cos(theta)*r; y = cy + Math.sin(theta)*r; break;
+      }
+
+      // ---------- NEW compact / complex ----------
+      case "spiro_epitro": {
+        // Epitrochoid: R, r, d scaled to stay compact
+        const Rb = maxR * 0.28 * (1 + 0.2 * getSecureRandomNumber());
+        const rb = Rb * (0.30 + 0.25 * getSecureRandomNumber()); // small gear
+        const d  = rb * (0.8 + 0.6 * getSecureRandomNumber());
+        const k  = (Rb + rb) / rb;
+        const xx = (Rb + rb) * Math.cos(theta) - d * Math.cos(k * theta);
+        const yy = (Rb + rb) * Math.sin(theta) - d * Math.sin(k * theta);
+        x = cx + xx; y = cy + yy;
         break;
       }
-      case "rings":
+      case "spiro_hypo": {
+        // Hypotrochoid (inside). Denser near center.
+        const Rb = maxR * 0.32 * (1 + 0.2 * getSecureRandomNumber());
+        const rb = Rb * (0.32 + 0.25 * getSecureRandomNumber());
+        const d  = rb * (0.7 + 0.5 * getSecureRandomNumber());
+        const k  = (Rb - rb) / rb;
+        const xx = (Rb - rb) * Math.cos(theta) + d * Math.cos(k * theta);
+        const yy = (Rb - rb) * Math.sin(theta) - d * Math.sin(k * theta);
+        x = cx + xx; y = cy + yy;
+        break;
+      }
+      case "involute": {
+        // Involute of a circle (scaled to ~0.8 maxR)
+        const a = maxR * 0.18;
+        const th = t * (twoPiT * 0.9);
+        const xx = a * (Math.cos(th) + th * Math.sin(th));
+        const yy = a * (Math.sin(th) - th * Math.cos(th));
+        x = cx + xx; y = cy + yy;
+        break;
+      }
+      case "lissajous_polar": {
+        // Dense lobes via radial modulation
+        const n = 6 + Math.floor(getSecureRandomNumber() * 5);   // 6–10 lobes
+        const m = 3 + Math.floor(getSecureRandomNumber() * 3);   // frequency mix
+        const mod = 0.45 + 0.40 * Math.sin(n * theta + m * 0.7);
+        r = maxR * 0.82 * t * (0.65 + 0.35 * mod);
+        x = cx + Math.cos(theta)*r; y = cy + Math.sin(theta)*r; break;
+      }
+      case "bundle": {
+        // Single path here (phase 0). Two extra phases drawn in the stroke builder.
+        const base = t * maxR * 0.85;
+        const wob  = 0.12 * Math.sin(7.0 * theta) + 0.08 * Math.cos(11.0 * theta);
+        r = base * (1 + wob);
+        x = cx + Math.cos(theta)*r; y = cy + Math.sin(theta)*r; break;
+      }
+
+      // fallback (rings-esque)
       default: {
-        r = t * maxR;
+        r = t * maxR; x = cx + Math.cos(theta)*r; y = cy + Math.sin(theta)*r; break;
       }
     }
 
-    const x = cx + Math.cos(theta) * r;
-    const y = cy + Math.sin(theta) * r;
-    pts.push({ x, y, t });
+    normAndPush(x, y, t);
   }
   return pts;
 }
@@ -172,27 +221,51 @@ function buildRings({ cx, cy, maxR, colorA, colorB }) {
 
 // Spiral strokes (two passes, A on top of B)
 function buildSpiralStrokes({ cx, cy, maxR, colorA, colorB, style }) {
-  const steps = 360 + RI(-24, 24);
-  const turns = 3.0 + R(-0.3, 0.4);
-  const pts = genSpiralPoints({ type: style, cx, cy, maxR, turns, steps });
-  const d = toPath(pts);
+  const steps = 540;                 // a bit denser for compact styles
+  const turns = (style === "involute") ? 2.2 : 3.2;
 
-  const wB = round(R(6.5, 9.0), 2);
-  const wA = round(wB * R(0.45, 0.65), 2);
+  // primary
+  const pts0 = genSpiralPoints({ type: style, cx, cy, maxR, turns, steps });
+  const d0 = toPath(pts0);
 
-  const opB = round(R(0.25, 0.45), 2);
-  const opA = round(R(0.65, 0.9),  2);
+  // base widths/opacity
+  const wB = round(R(6.0, 8.0), 2);
+  const wA = round(wB * R(0.45, 0.62), 2);
+  const opB = round(R(0.28, 0.42), 2);
+  const opA = round(R(0.68, 0.9),  2);
 
-  // dash pattern to create banding feel
-  const dashB = `${round(R(10, 18),1)} ${round(R(7, 14),1)}`;
-  const dashA = `${round(R(7, 12),1)} ${round(R(6, 11),1)}`;
+  const dashB = `${round(R(9, 16),1)} ${round(R(6, 12),1)}`;
+  const dashA = `${round(R(6, 11),1)} ${round(R(5, 10),1)}`;
 
-  return `
+  // default 2-layer stroke
+  let out = `
     <g id="iris-spiral" fill="none">
-      <path d="${d}" stroke="${colorB}" stroke-width="${wB}" opacity="${opB}" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="${dashB}"/>
-      <path d="${d}" stroke="${colorA}" stroke-width="${wA}" opacity="${opA}" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="${dashA}"/>
-    </g>
+      <path d="${d0}" stroke="${colorB}" stroke-width="${wB}" opacity="${opB}" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="${dashB}"/>
+      <path d="${d0}" stroke="${colorA}" stroke-width="${wA}" opacity="${opA}" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="${dashA}"/>
   `;
+
+  // EXTRA: for 'bundle', add two phase-shifted tight spirals for a compact “vortex”
+  if (style === "bundle") {
+    const mkPhase = (phase) => {
+      const pts = pts0.map((p, i) => {
+        const th = (i / (pts0.length - 1 || 1)) * turns * 2 * Math.PI + phase;
+        const wob = 0.11 * Math.sin(7.0 * th) + 0.08 * Math.cos(11.0 * th);
+        const r = (i / (pts0.length - 1 || 1)) * maxR * 0.82 * (1 + wob);
+        return { x: cx + Math.cos(th) * r, y: cy + Math.sin(th) * r };
+      });
+      return toPath(pts);
+    };
+    const d1 = mkPhase( 0.35);
+    const d2 = mkPhase(-0.35);
+    const wSub = round(wA * 0.8, 2);
+    out += `
+      <path d="${d1}" stroke="${colorA}" stroke-width="${wSub}" opacity="${opA}" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="${d2}" stroke="${colorB}" stroke-width="${wSub}" opacity="${opA}" stroke-linecap="round" stroke-linejoin="round"/>
+    `;
+  }
+
+  out += `</g>`;
+  return out;
 }
 
 // Lens glow gradient tinted by the bright frame color

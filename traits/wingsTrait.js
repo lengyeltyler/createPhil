@@ -1,4 +1,5 @@
-// public/traitGeneration/wingsTrait.js
+// wingsTrait.js — editor-safe: no <defs>, no gradients/filters, no ids
+
 import { getColorByNumber, getSecureRandomNumber } from "../utils/colorUtils.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
@@ -54,12 +55,9 @@ function hslToHex(h, s, l) {
   return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
 }
 function clamp01(v) { return Math.min(1, Math.max(0, v)); }
-function shade(hex, dl) { // dl in [-0.5, 0.5]
-  const { h, s, l } = hexToHSL(hex);
-  return hslToHex(h, s, clamp01(l + dl));
-}
+function shade(hex, dl) { const { h, s, l } = hexToHSL(hex); return hslToHex(h, s, clamp01(l + dl)); }
 
-// quick hit-test using canvas rasterization (keeps patterns inside)
+// quick hit-test to keep dots inside the wing shape
 function isPointInPath(pathData, x, y, viewBox = `0 0 ${CANVAS_SIZE} ${CANVAS_SIZE}`) {
   const [minX, minY, w, h] = viewBox.split(/\s+/).map(Number);
   const c = document.createElement("canvas");
@@ -72,9 +70,6 @@ function isPointInPath(pathData, x, y, viewBox = `0 0 ${CANVAS_SIZE} ${CANVAS_SI
 }
 
 /* ---------------- main ---------------- */
-/**
- * Wings with reduced glow and 3 shaded layers of one random color.
- */
 export async function generateTrait(_unused = null, _isStatic = true) {
   try {
     const [bottomData, middleData, topData] = await Promise.all([
@@ -89,93 +84,53 @@ export async function generateTrait(_unused = null, _isStatic = true) {
 
     const viewBox = bottomData.viewBox || `0 0 ${CANVAS_SIZE} ${CANVAS_SIZE}`;
 
-    // -------- choose one random base color, make three shades
+    // one base color, build 3 shades
     const paletteIndex = Math.floor(getSecureRandomNumber() * 69); // 0..68
     const baseHex = getColorByNumber(paletteIndex);
-
-    // light (top), base (middle), dark (bottom)
     const topHex    = shade(baseHex,  +0.18);
     const middleHex = baseHex;
     const bottomHex = shade(baseHex,  -0.18);
 
-    // subtle gradients using the same shade family (adds depth without new hues)
-    const grad = (id, hex) => {
-      const hi = shade(hex, +0.08);
-      const lo = shade(hex, -0.08);
-      return `
-        <linearGradient id="${id}" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%"   stop-color="${hi}" />
-          <stop offset="50%"  stop-color="${hex}" />
-          <stop offset="100%" stop-color="${lo}" />
-        </linearGradient>`;
-    };
-
-    // patterns (kept subtle)
+    // subtle per-layer dot texture
     const buildPatternDots = (pathData, viewBoxStr, hex) => {
       const tmp = document.createElementNS(SVG_NS, "path");
       tmp.setAttribute("d", pathData);
       const bbox = tmp.getBBox();
-      const count = 10 + Math.floor(getSecureRandomNumber() * 16); // 10–25 dots
+      const count = 10 + Math.floor(getSecureRandomNumber() * 16); // 10–25
       let s = "";
       for (let i = 0; i < count; i++) {
         const x = bbox.x + getSecureRandomNumber() * bbox.width;
         const y = bbox.y + getSecureRandomNumber() * bbox.height;
         if (!isPointInPath(pathData, x, y, viewBoxStr)) continue;
-        const r = 0.8 + getSecureRandomNumber() * 1.6; // tiny dots
+        const r = 0.8 + getSecureRandomNumber() * 1.6;
         s += `<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${r.toFixed(2)}" fill="${shade(hex, -0.10)}" opacity="0.35"/>`;
       }
       return s;
     };
 
-    // HALF THE GLOW: lower blur + opacity
-    const GLOW_STD = 2.5;   // was ~5
-    const GLOW_OPA = 0.4;   // was ~0.8
     const SHADOW_OPACITY = 0.22;
 
-    // namespaced IDs to avoid any cross-trait collisions
-    const ID_GRAD_TOP = "wings-grad-top";
-    const ID_GRAD_MID = "wings-grad-middle";
-    const ID_GRAD_BOT = "wings-grad-bottom";
-    const ID_FILTER   = "wings-glow";
-
+    // NOTE: no <defs>, no gradient/filter ids — solid fills only
     const svg = `
       <svg xmlns="${SVG_NS}" width="${CANVAS_SIZE}" height="${CANVAS_SIZE}" viewBox="${viewBox}">
-        <defs>
-          ${grad(ID_GRAD_TOP,    topHex)}
-          ${grad(ID_GRAD_MID,    middleHex)}
-          ${grad(ID_GRAD_BOT,    bottomHex)}
-          <filter id="${ID_FILTER}" x="-40%" y="-40%" width="180%" height="180%">
-            <feGaussianBlur in="SourceGraphic" stdDeviation="${GLOW_STD}" result="b"/>
-            <feColorMatrix in="b" type="matrix"
-              values="1 0 0 0 0
-                      0 1 0 0 0
-                      0 0 1 0 0
-                      0 0 0 ${GLOW_OPA} 0" result="c"/>
-            <feMerge>
-              <feMergeNode in="c"/>
-              <feMergeNode in="SourceGraphic"/>
-            </feMerge>
-          </filter>
-        </defs>
-
         <!-- bottom wing (darkest shade) -->
-        <g class="wing-layer wing-bottom">
+        <g>
           <path d="${bottomData.pathData}" fill="#000" opacity="${SHADOW_OPACITY}" transform="translate(1.5,1.5)"/>
-          <path d="${bottomData.pathData}" fill="url(#${ID_GRAD_BOT})" filter="url(#${ID_FILTER})"/>
+          <path d="${bottomData.pathData}" fill="${bottomHex}"/>
           ${buildPatternDots(bottomData.pathData, viewBox, bottomHex)}
         </g>
 
         <!-- middle wing (base shade) -->
-        <g class="wing-layer wing-middle">
+        <g>
           <path d="${middleData.pathData}" fill="#000" opacity="${SHADOW_OPACITY}" transform="translate(0.8,0.8)"/>
-          <path d="${middleData.pathData}" fill="url(#${ID_GRAD_MID})" filter="url(#${ID_FILTER})"/>
+          <path d="${middleData.pathData}" fill="${middleHex}"/>
           ${buildPatternDots(middleData.pathData, viewBox, middleHex)}
         </g>
 
         <!-- top wing (lightest shade) -->
-        <g class="wing-layer wing-top">
+        <g>
           <path d="${topData.pathData}" fill="#000" opacity="${SHADOW_OPACITY}" transform="translate(0.3,0.3)"/>
-          <path d="${topData.pathData}" fill="url(#${ID_GRAD_TOP})" filter="url(#${ID_FILTER})"/>
+          <path d="${topData.pathData}" fill="${topHex}"/>
           ${buildPatternDots(topData.pathData, viewBox, topHex)}
         </g>
       </svg>

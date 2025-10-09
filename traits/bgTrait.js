@@ -1,4 +1,4 @@
-// bgTrait.js — 13 palettes, random role-mapping per render, crisp output
+// bgTrait.js — editor-safe: no <defs>, no <symbol>/<use>, no filters
 
 import { getSecureRandomNumber } from "../utils/colorUtils.js";
 import { validateSVGSize } from "../utils/sizeValidation.js";
@@ -14,7 +14,6 @@ const RI = (min, max) => Math.floor(R(min, max + 1));
 const round = (n, d = 1) => Number(n.toFixed(d));
 const pick  = (arr) => arr[RI(0, arr.length - 1)];
 function shuffle(arr){
-  // Fisher–Yates with our secure RNG
   for (let i = arr.length - 1; i > 0; i--) {
     const j = Math.floor(getSecureRandomNumber() * (i + 1));
     [arr[i], arr[j]] = [arr[j], arr[i]];
@@ -77,12 +76,7 @@ function logSpiralPoint(cx, cy, a, b, theta) {
 
 const SPIRAL_TYPES = [
   "log", "tight", "loose", "flower", "sinewave", "randomwalk", "mirror",
-  "arch",        // Archimedean (r ∝ θ)
-  "fermat",      // Fermat (r ∝ √θ) — gentle growth
-  "lituus",      // Lituus (r ∝ 1/√θ) — inward curl
-  "rose",        // Rose curve lobes along an outward spiral
-  "phyllo",      // Phyllotaxis (golden-angle) point placement
-  "noisy"        // Low-frequency noise-like wiggle
+  "arch", "fermat", "lituus", "rose", "phyllo", "noisy"
 ];
 
 function generateArmPoints({cx, cy, armIndex, totalArms, type, points, maxRadius}) {
@@ -130,7 +124,7 @@ function generateArmPoints({cx, cy, armIndex, totalArms, type, points, maxRadius
         const r = t * maxRadius;
         x = cx + Math.cos(theta)*r; y = cy + Math.sin(theta)*r; break;
       }
-      case "arch": { // Archimedean: r = k * θ (monotonic, linear growth)
+      case "arch": {
         const turns = 3.6;
         const theta = thetaStart + t * turns * 2 * Math.PI;
         const k = maxRadius / (turns * 2 * Math.PI);
@@ -139,7 +133,7 @@ function generateArmPoints({cx, cy, armIndex, totalArms, type, points, maxRadius
         y = cy + Math.sin(theta) * r;
         break;
       }
-      case "fermat": { // Fermat: r = c * √θ (slow start, then opens)
+      case "fermat": {
         const turns = 3.2;
         const theta = thetaStart + t * turns * 2 * Math.PI;
         const total = turns * 2 * Math.PI;
@@ -149,7 +143,7 @@ function generateArmPoints({cx, cy, armIndex, totalArms, type, points, maxRadius
         y = cy + Math.sin(theta) * r;
         break;
       }
-      case "lituus": { // Lituus: r = k / √θ (strong inward curl)
+      case "lituus": {
         const turns = 3.0;
         const theta = thetaStart + (1 - t) * turns * 2 * Math.PI + 1e-3;
         const k = maxRadius * Math.sqrt(turns * 2 * Math.PI);
@@ -159,7 +153,7 @@ function generateArmPoints({cx, cy, armIndex, totalArms, type, points, maxRadius
         y = cy + Math.sin(theta) * r;
         break;
       }
-      case "rose": { // Rose lobes along an outward spiral envelope
+      case "rose": {
         const turns = 3.2;
         const theta = thetaStart + t * turns * 2 * Math.PI;
         const lobes = 5 + Math.floor(getSecureRandomNumber() * 4); // 5–8
@@ -169,15 +163,15 @@ function generateArmPoints({cx, cy, armIndex, totalArms, type, points, maxRadius
         y = cy + Math.sin(theta) * r;
         break;
       }
-      case "phyllo": { // Golden-angle phyllotaxis projected radially
+      case "phyllo": {
         const s = i + armIndex * 7;
-        const r = Math.sqrt(s / (points - 1 || 1)) * maxRadius; // √n spacing
+        const r = Math.sqrt(s / (points - 1 || 1)) * maxRadius;
         const theta = thetaStart + s * GOLDEN_ANGLE;
         x = cx + Math.cos(theta) * r;
         y = cy + Math.sin(theta) * r;
         break;
       }
-      case "noisy": { // Low-freq wobble in both angle and radius
+      case "noisy": {
         const baseTurns = 3.8;
         const wob = 0.35 * Math.sin(t * 6 + armIndex * 0.9) +
                     0.2  * Math.sin(t * 11.3 + i * 0.17);
@@ -196,67 +190,6 @@ function generateArmPoints({cx, cy, armIndex, totalArms, type, points, maxRadius
     pts.push({ x: round(x), y: round(y), t });
   }
   return pts;
-}
-
-// ---------- SVG builders ----------
-function buildDefs() {
-  // NOTE: namespaced ID so <use href="#bg-d"> matches the symbol
-  return `
-    <defs>
-      <symbol id="bg-d" overflow="visible">
-        <circle cx="0" cy="0" r="1"></circle>
-      </symbol>
-    </defs>
-  `;
-}
-
-function emitUses(points, { baseR = 2.2, minR = 0.5, fill, opacityCurve = (t)=>Math.pow(1-t,0.5)*0.8 }) {
-  let out = `<g fill="${fill}">`;
-  for (const p of points) {
-    const r = round(minR + (1 - p.t) * baseR, 1);
-    const o = round(opacityCurve(p.t), 2);
-    out += `<use href="#bg-d" transform="translate(${p.x} ${p.y}) scale(${r})" opacity="${o}"/>`;
-  }
-  out += `</g>`;
-  return out;
-}
-
-function addBackgroundStars(num, color) {
-  let out = `<g id="bg-stars" fill="${color}">`;
-  for (let i = 0; i < num; i++) {
-    const x = round(R(0, WIDTH), 1);
-    const y = round(R(0, HEIGHT), 1);
-    const r = round(R(0.3, 1.6), 1);
-    const o = round(R(0.25, 1), 2);
-    out += `<use href="#bg-d" transform="translate(${x} ${y}) scale(${r})" opacity="${o}"/>`;
-  }
-  out += `</g>`;
-  return out;
-}
-
-function addGalaxyCore(coreColor, rOverride) {
-  // gentle range; adjust to taste
-  const CORE_R_MIN = 69;
-  const CORE_R_MAX = 79;
-
-  const r = Math.round(
-    Number.isFinite(rOverride) ? rOverride : R(CORE_R_MIN, CORE_R_MAX)
-  );
-
-  // NOTE: namespaced gradient id and reference
-  return `
-    <defs>
-      <radialGradient id="bg-coreGlow" gradientUnits="userSpaceOnUse"
-        cx="${WIDTH/2}" cy="${HEIGHT/2}" r="${r}">
-        <stop offset="0"   stop-color="${coreColor}" stop-opacity="0.6"/>
-        <stop offset="0.5" stop-color="${coreColor}" stop-opacity="0.3"/>
-        <stop offset="1"   stop-color="${coreColor}" stop-opacity="0"/>
-      </radialGradient>
-    </defs>
-    <g id="bg-core">
-      <circle cx="${WIDTH/2}" cy="${HEIGHT/2}" r="${r}" fill="url(#bg-coreGlow)"/>
-    </g>
-  `;
 }
 
 // ---------- 13 palettes (each has 6 distinct colors) ----------
@@ -278,57 +211,69 @@ const PALETTES = [
 
 // ---------- main ----------
 export function generateTrait() {
-  // (1) choose palette, then randomly map its colors to roles each time
+  // choose palette and map roles each time
   const chosen = pick(PALETTES);
   const [bg, stars, dust, armA, armB, core] = shuffle(chosen.colors.slice());
-
-  const P = { bg, stars, dust, armA, armB, core };
-
-  // (2) spiral type (single type across arms for coherence)
   const spiralType = pick(SPIRAL_TYPES);
 
-  // (3) config
   const numArms = 6;
   const pointsPerArm = 36;
   const maxRadius = WIDTH * 0.369;
   const numBackgroundStars = 69;
   const dustEvery = 0.04;
 
-  // (4) build arms
-  let arms = `<g id="bg-arms">`;
+  // build arms as literal circles (no <use>)
+  let arms = `<g>`;
   for (let i = 0; i < numArms; i++) {
     const pts = generateArmPoints({
       cx: WIDTH/2, cy: HEIGHT/2,
       armIndex: i, totalArms: numArms,
       type: spiralType, points: pointsPerArm, maxRadius
     });
+    const col = (i % 2 === 0) ? armA : armB;
 
-    // alternate the two arm colors
-    const col = (i % 2 === 0) ? P.armA : P.armB;
-    arms += `<g id="bg-arm-${i}" data-type="${spiralType}">`;
-    arms += emitUses(pts, { baseR: 2.6, minR: 0.6, fill: col });
+    // main dots
+    for (const p of pts) {
+      const r = round(0.6 + (1 - p.t) * 2.6, 1);
+      const o = round(Math.pow(1 - p.t, 0.5) * 0.8, 2);
+      arms += `<circle cx="${p.x}" cy="${p.y}" r="${r}" fill="${col}" opacity="${o}"/>`;
+    }
 
-    // dust (soft dots with small tint variance)
+    // dust dots
     if (dustEvery > 0) {
       const dustPts = pts.filter(()=> getSecureRandomNumber() < dustEvery);
-      const dustCol = tint(P.dust, R(-0.08, 0.08));
-      arms += emitUses(dustPts, {
-        baseR: 6, minR: 3, fill: dustCol,
-        opacityCurve:(t)=>round(Math.pow(1-t,0.35)*0.35,2)
-      });
+      const dustCol = tint(dust, R(-0.08, 0.08));
+      for (const p of dustPts) {
+        const r = round(3 + (1 - p.t) * 3, 1);
+        const o = round(Math.pow(1 - p.t, 0.35) * 0.35, 2);
+        arms += `<circle cx="${p.x}" cy="${p.y}" r="${r}" fill="${dustCol}" opacity="${o}"/>`;
+      }
     }
-    arms += `</g>`;
   }
   arms += `</g>`;
 
-  // (5) assemble SVG (background, stars, arms, core glow)
+  // simple core glow approximation: a few faint concentric circles (no gradient/filter)
+  const coreR = Math.round(R(69, 79));
+  let coreGlow = `<g>`;
+  for (const [mult, op] of [[1,0.18],[0.68,0.28],[0.38,0.42]]) {
+    coreGlow += `<circle cx="${WIDTH/2}" cy="${HEIGHT/2}" r="${Math.round(coreR*mult)}" fill="${core}" opacity="${op}"/>`;
+  }
+  coreGlow += `</g>`;
+
   const svg =
 `<svg xmlns="${SVG_NS}" width="${WIDTH}" height="${HEIGHT}" viewBox="0 0 ${WIDTH} ${HEIGHT}">
-  ${buildDefs()}
-  <g id="bg-rect"><rect width="100%" height="100%" fill="${P.bg}"/></g>
-  ${addBackgroundStars(numBackgroundStars, P.stars)}
+  <rect width="100%" height="100%" fill="${bg}"/>
+  <g> ${
+    Array.from({length: numBackgroundStars}).map(() => {
+      const x = round(R(0, WIDTH), 1);
+      const y = round(R(0, HEIGHT), 1);
+      const r = round(R(0.3, 1.6), 1);
+      const o = round(R(0.25, 1), 2);
+      return `<circle cx="${x}" cy="${y}" r="${r}" fill="${stars}" opacity="${o}"/>`;
+    }).join("")
+  } </g>
   ${arms}
-  ${addGalaxyCore(P.core)}
+  ${coreGlow}
 </svg>`.replace(/\s*\n\s*/g, " ").trim();
 
   validateSVGSize(svg);

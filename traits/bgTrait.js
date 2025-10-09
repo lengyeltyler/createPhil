@@ -133,14 +133,12 @@ function generateArmPoints({cx, cy, armIndex, totalArms, type, points, maxRadius
       case "arch": { // Archimedean: r = k * θ (monotonic, linear growth)
         const turns = 3.6;
         const theta = thetaStart + t * turns * 2 * Math.PI;
-        // choose k so that at t=1 we hit ~maxRadius
         const k = maxRadius / (turns * 2 * Math.PI);
         const r = k * (theta - thetaStart);
         x = cx + Math.cos(theta) * r;
         y = cy + Math.sin(theta) * r;
         break;
       }
-
       case "fermat": { // Fermat: r = c * √θ (slow start, then opens)
         const turns = 3.2;
         const theta = thetaStart + t * turns * 2 * Math.PI;
@@ -151,19 +149,16 @@ function generateArmPoints({cx, cy, armIndex, totalArms, type, points, maxRadius
         y = cy + Math.sin(theta) * r;
         break;
       }
-
       case "lituus": { // Lituus: r = k / √θ (strong inward curl)
         const turns = 3.0;
-        // walk backward so start is larger, end tighter near center
-        const theta = thetaStart + (1 - t) * turns * 2 * Math.PI + 1e-3; // avoid div/0
-        const k = maxRadius * Math.sqrt(turns * 2 * Math.PI); // r == maxRadius at t==0
+        const theta = thetaStart + (1 - t) * turns * 2 * Math.PI + 1e-3;
+        const k = maxRadius * Math.sqrt(turns * 2 * Math.PI);
         const rRaw = k / Math.sqrt(theta - thetaStart);
-        const r = Math.min(rRaw, maxRadius); // clamp to stay within bounds
+        const r = Math.min(rRaw, maxRadius);
         x = cx + Math.cos(theta) * r;
         y = cy + Math.sin(theta) * r;
         break;
       }
-
       case "rose": { // Rose lobes along an outward spiral envelope
         const turns = 3.2;
         const theta = thetaStart + t * turns * 2 * Math.PI;
@@ -174,17 +169,14 @@ function generateArmPoints({cx, cy, armIndex, totalArms, type, points, maxRadius
         y = cy + Math.sin(theta) * r;
         break;
       }
-
       case "phyllo": { // Golden-angle phyllotaxis projected radially
-        // Map i to a “seed index” s so dots form a sunflower-like arm
-        const s = i + armIndex * 7; // offset arms so they don’t overlap
+        const s = i + armIndex * 7;
         const r = Math.sqrt(s / (points - 1 || 1)) * maxRadius; // √n spacing
         const theta = thetaStart + s * GOLDEN_ANGLE;
         x = cx + Math.cos(theta) * r;
         y = cy + Math.sin(theta) * r;
         break;
       }
-
       case "noisy": { // Low-freq wobble in both angle and radius
         const baseTurns = 3.8;
         const wob = 0.35 * Math.sin(t * 6 + armIndex * 0.9) +
@@ -208,9 +200,10 @@ function generateArmPoints({cx, cy, armIndex, totalArms, type, points, maxRadius
 
 // ---------- SVG builders ----------
 function buildDefs() {
+  // NOTE: namespaced ID so <use href="#bg-d"> matches the symbol
   return `
     <defs>
-      <symbol id="d" overflow="visible">
+      <symbol id="bg-d" overflow="visible">
         <circle cx="0" cy="0" r="1"></circle>
       </symbol>
     </defs>
@@ -222,20 +215,20 @@ function emitUses(points, { baseR = 2.2, minR = 0.5, fill, opacityCurve = (t)=>M
   for (const p of points) {
     const r = round(minR + (1 - p.t) * baseR, 1);
     const o = round(opacityCurve(p.t), 2);
-    out += `<use href="#d" transform="translate(${p.x} ${p.y}) scale(${r})" opacity="${o}"/>`;
+    out += `<use href="#bg-d" transform="translate(${p.x} ${p.y}) scale(${r})" opacity="${o}"/>`;
   }
   out += `</g>`;
   return out;
 }
 
 function addBackgroundStars(num, color) {
-  let out = `<g id="stars" fill="${color}">`;
+  let out = `<g id="bg-stars" fill="${color}">`;
   for (let i = 0; i < num; i++) {
     const x = round(R(0, WIDTH), 1);
     const y = round(R(0, HEIGHT), 1);
     const r = round(R(0.3, 1.6), 1);
     const o = round(R(0.25, 1), 2);
-    out += `<use href="#d" transform="translate(${x} ${y}) scale(${r})" opacity="${o}"/>`;
+    out += `<use href="#bg-d" transform="translate(${x} ${y}) scale(${r})" opacity="${o}"/>`;
   }
   out += `</g>`;
   return out;
@@ -246,22 +239,22 @@ function addGalaxyCore(coreColor, rOverride) {
   const CORE_R_MIN = 69;
   const CORE_R_MAX = 79;
 
-  // allow caller to force a radius (handy for testing), else randomize
   const r = Math.round(
     Number.isFinite(rOverride) ? rOverride : R(CORE_R_MIN, CORE_R_MAX)
   );
 
+  // NOTE: namespaced gradient id and reference
   return `
     <defs>
-      <radialGradient id="coreGlow" gradientUnits="userSpaceOnUse"
+      <radialGradient id="bg-coreGlow" gradientUnits="userSpaceOnUse"
         cx="${WIDTH/2}" cy="${HEIGHT/2}" r="${r}">
         <stop offset="0"   stop-color="${coreColor}" stop-opacity="0.6"/>
         <stop offset="0.5" stop-color="${coreColor}" stop-opacity="0.3"/>
         <stop offset="1"   stop-color="${coreColor}" stop-opacity="0"/>
       </radialGradient>
     </defs>
-    <g id="core">
-      <circle cx="${WIDTH/2}" cy="${HEIGHT/2}" r="${r}" fill="url(#coreGlow)"/>
+    <g id="bg-core">
+      <circle cx="${WIDTH/2}" cy="${HEIGHT/2}" r="${r}" fill="url(#bg-coreGlow)"/>
     </g>
   `;
 }
@@ -302,7 +295,7 @@ export function generateTrait() {
   const dustEvery = 0.04;
 
   // (4) build arms
-  let arms = `<g id="arms">`;
+  let arms = `<g id="bg-arms">`;
   for (let i = 0; i < numArms; i++) {
     const pts = generateArmPoints({
       cx: WIDTH/2, cy: HEIGHT/2,
@@ -312,7 +305,7 @@ export function generateTrait() {
 
     // alternate the two arm colors
     const col = (i % 2 === 0) ? P.armA : P.armB;
-    arms += `<g id="arm-${i}" data-type="${spiralType}">`;
+    arms += `<g id="bg-arm-${i}" data-type="${spiralType}">`;
     arms += emitUses(pts, { baseR: 2.6, minR: 0.6, fill: col });
 
     // dust (soft dots with small tint variance)
@@ -332,7 +325,7 @@ export function generateTrait() {
   const svg =
 `<svg xmlns="${SVG_NS}" width="${WIDTH}" height="${HEIGHT}" viewBox="0 0 ${WIDTH} ${HEIGHT}">
   ${buildDefs()}
-  <g id="bg"><rect width="100%" height="100%" fill="${P.bg}"/></g>
+  <g id="bg-rect"><rect width="100%" height="100%" fill="${P.bg}"/></g>
   ${addBackgroundStars(numBackgroundStars, P.stars)}
   ${arms}
   ${addGalaxyCore(P.core)}

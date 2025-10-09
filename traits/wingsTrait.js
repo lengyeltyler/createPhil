@@ -93,7 +93,7 @@ export async function generateTrait(_unused = null, _isStatic = true) {
     const paletteIndex = Math.floor(getSecureRandomNumber() * 69); // 0..68
     const baseHex = getColorByNumber(paletteIndex);
 
-    // light (top), base (middle), dark (bottom) – tweak amounts as you like
+    // light (top), base (middle), dark (bottom)
     const topHex    = shade(baseHex,  +0.18);
     const middleHex = baseHex;
     const bottomHex = shade(baseHex,  -0.18);
@@ -132,13 +132,19 @@ export async function generateTrait(_unused = null, _isStatic = true) {
     const GLOW_OPA = 0.4;   // was ~0.8
     const SHADOW_OPACITY = 0.22;
 
+    // namespaced IDs to avoid any cross-trait collisions
+    const ID_GRAD_TOP = "wings-grad-top";
+    const ID_GRAD_MID = "wings-grad-middle";
+    const ID_GRAD_BOT = "wings-grad-bottom";
+    const ID_FILTER   = "wings-glow";
+
     const svg = `
       <svg xmlns="${SVG_NS}" width="${CANVAS_SIZE}" height="${CANVAS_SIZE}" viewBox="${viewBox}">
         <defs>
-          ${grad("grad-top",    topHex)}
-          ${grad("grad-middle", middleHex)}
-          ${grad("grad-bottom", bottomHex)}
-          <filter id="wing-glow" x="-40%" y="-40%" width="180%" height="180%">
+          ${grad(ID_GRAD_TOP,    topHex)}
+          ${grad(ID_GRAD_MID,    middleHex)}
+          ${grad(ID_GRAD_BOT,    bottomHex)}
+          <filter id="${ID_FILTER}" x="-40%" y="-40%" width="180%" height="180%">
             <feGaussianBlur in="SourceGraphic" stdDeviation="${GLOW_STD}" result="b"/>
             <feColorMatrix in="b" type="matrix"
               values="1 0 0 0 0
@@ -155,21 +161,21 @@ export async function generateTrait(_unused = null, _isStatic = true) {
         <!-- bottom wing (darkest shade) -->
         <g class="wing-layer wing-bottom">
           <path d="${bottomData.pathData}" fill="#000" opacity="${SHADOW_OPACITY}" transform="translate(1.5,1.5)"/>
-          <path d="${bottomData.pathData}" fill="url(#grad-bottom)" filter="url(#wing-glow)"/>
+          <path d="${bottomData.pathData}" fill="url(#${ID_GRAD_BOT})" filter="url(#${ID_FILTER})"/>
           ${buildPatternDots(bottomData.pathData, viewBox, bottomHex)}
         </g>
 
         <!-- middle wing (base shade) -->
         <g class="wing-layer wing-middle">
           <path d="${middleData.pathData}" fill="#000" opacity="${SHADOW_OPACITY}" transform="translate(0.8,0.8)"/>
-          <path d="${middleData.pathData}" fill="url(#grad-middle)" filter="url(#wing-glow)"/>
+          <path d="${middleData.pathData}" fill="url(#${ID_GRAD_MID})" filter="url(#${ID_FILTER})"/>
           ${buildPatternDots(middleData.pathData, viewBox, middleHex)}
         </g>
 
         <!-- top wing (lightest shade) -->
         <g class="wing-layer wing-top">
           <path d="${topData.pathData}" fill="#000" opacity="${SHADOW_OPACITY}" transform="translate(0.3,0.3)"/>
-          <path d="${topData.pathData}" fill="url(#grad-top)" filter="url(#wing-glow)"/>
+          <path d="${topData.pathData}" fill="url(#${ID_GRAD_TOP})" filter="url(#${ID_FILTER})"/>
           ${buildPatternDots(topData.pathData, viewBox, topHex)}
         </g>
       </svg>

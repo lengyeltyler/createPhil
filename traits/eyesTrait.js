@@ -419,7 +419,7 @@ export async function generateTrait(jsonData) {
       <mask id="${maskId}">
         <path d="${lensPath}" fill="#fff"/>
       </mask>
-      <g mask="url(#${maskId})">
+      <g mask="url(#${maskId})" clip-path="url(#${idClip})">
         <rect x="0" y="0" width="100%" height="100%" fill="url(#${idGlow})"/>
         ${iris}
         ${gloss}

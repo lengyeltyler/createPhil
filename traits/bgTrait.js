@@ -254,7 +254,7 @@ export function generateTrait() {
   arms += `</g>`;
 
   // adaptive core glow: mono (old look) OR stacked layers of the same hue
-  const coreR = Math.round(R(69, 79));
+  const coreR = Math.round(R(26, 39));
 
   // 50/50 mono vs stacked; tweak weights if you want more/less layering
   const coreMode = getSecureRandomNumber() < 0.5 ? "mono" : "stacked";

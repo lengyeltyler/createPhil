@@ -43,6 +43,45 @@ function pickCenterInside(pathData, viewBox) {
   return { cx: minX + w/2, cy: minY + h/2 };
 }
 
+function maxRadiusInsidePath(pathData, cx, cy, viewBox = `0 0 ${SIZE} ${SIZE}`, {
+  samples = 128,         // angular samples around the center
+  tol = 0.5,             // px precision for the boundary
+  margin = 0             // safety margin to shrink a bit
+} = {}) {
+  const [minX, minY, w, h] = viewBox.split(" ").map(Number);
+  const diag = Math.hypot(w, h);
+  const isInside = (x, y) => isPointInPathRasterized(pathData, x, y, viewBox);
+
+  // Ensure center is inside; if not, caller should pick another center
+  if (!isInside(cx, cy)) return 0;
+
+  let minR = Infinity;
+  for (let i = 0; i < samples; i++) {
+    const theta = (i / samples) * 2 * Math.PI;
+    // Binary search along this ray for the last "inside" point
+    let lo = 0, hi = diag;         // hi big enough to cross boundary
+    // If starting 'hi' is inside, push it out until it's outside
+    if (isInside(cx + Math.cos(theta) * hi, cy + Math.sin(theta) * hi)) {
+      // Expand hi until outside or until cap
+      let step = hi;
+      for (let k = 0; k < 8; k++) { // a few expansions
+        step *= 2;
+        if (!isInside(cx + Math.cos(theta) * step, cy + Math.sin(theta) * step)) { hi = step; break; }
+      }
+    }
+    // Now binary-search boundary crossing
+    for (let it = 0; it < 24; it++) {
+      const mid = (lo + hi) / 2;
+      const x = cx + Math.cos(theta) * mid;
+      const y = cy + Math.sin(theta) * mid;
+      if (isInside(x, y)) lo = mid; else hi = mid;
+      if (hi - lo <= tol) break;
+    }
+    minR = Math.min(minR, lo);
+  }
+  return Math.max(0, minR - margin);
+}
+
 async function fetchJSON(url) {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Failed to fetch ${url}`);
@@ -269,9 +308,10 @@ function buildSpiralStrokes({ cx, cy, maxR, colorA, colorB, style }) {
 }
 
 // Lens glow gradient tinted by the bright frame color
-function buildDefs({ cx, cy, lensR, bright }) {
+function buildDefs({ cx, cy, lensR, bright, lensPath }) {
   const idGlow  = uid("glow");
   const idGloss = uid("gloss");
+  const idClip  = uid("clip");
   const defs = `
     <defs>
       <radialGradient id="${idGlow}" gradientUnits="userSpaceOnUse" cx="${cx}" cy="${cy}" r="${lensR}">
@@ -284,10 +324,14 @@ function buildDefs({ cx, cy, lensR, bright }) {
         <stop offset="0%" stop-color="#ffffff" stop-opacity="0.9"/>
         <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
       </radialGradient>
+
+      <clipPath id="${idClip}" clipPathUnits="userSpaceOnUse">
+        <path d="${lensPath}"/>
+      </clipPath>
     </defs>
   `.replace(/\s*\n\s*/g, " ").trim();
 
-  return { defs, idGlow, idGloss };
+  return { defs, idGlow, idGloss, idClip };
 }
 
 function buildGloss({ idGloss, cx, cy }) {
@@ -304,58 +348,72 @@ export async function generateTrait(jsonData) {
   if (!jsonData) {
     const base = "/traits_json";
     const [eyesData, frameData] = await Promise.all([
-      fetchJSON(`${base}/eyesOutline.json`),
+      fetchJSON(`${base}/eyesOutline.json`),   // should be the LENS path
       fetchJSON(`${base}/frameOutline.json`),
     ]);
     jsonData = { eyes: eyesData, frames: frameData };
   }
 
-  if (!jsonData?.eyes?.pathData || !jsonData?.frames?.pathData) {
-    throw new Error("Eyes trait requires eyes.pathData and frames.pathData.");
+  // If you have a separate lens path json, prefer it here:
+  const lensPath = jsonData?.eyes?.pathData;   // rename for clarity
+  const framePath = jsonData?.frames?.pathData;
+
+  if (!lensPath || !framePath) {
+    throw new Error("Eyes trait requires lens (eyes.pathData) and frames.pathData.");
   }
 
   const viewBox = jsonData.eyes.viewBox || `0 0 ${SIZE} ${SIZE}`;
-  const { cx, cy } = pickCenterInside(jsonData.eyes.pathData, viewBox);
 
-  // pick palette -> [bright, darkA, darkB]
+  // 1) pick a center INSIDE the lens
+  const { cx, cy } = pickCenterInside(lensPath, viewBox);
+
+  // 2) palette
   const [bright, darkA, darkB] = PALETTES[RI(0, PALETTES.length - 1)];
 
-  const maxR  = Math.min(SIZE, SIZE) * R(0.27, 0.33);
-  const lensR = round(maxR * R(1.05, 1.25), 2);
+  // 3) compute geometric maxR that truly fits inside lens (raw, before stroke)
+  //    Use a tiny margin to counter AA at the boundary.
+  const maxRGeo = maxRadiusInsidePath(lensPath, cx, cy, viewBox, { samples: 144, tol: 0.5, margin: 1.0 });
 
-  const { defs, idGlow, idGloss } = buildDefs({ cx, cy, lensR, bright });
-
-  // choose spiral style
+  // 4) choose style now (needed to size strokes)
   const style = SPIRAL_STYLES[RI(0, SPIRAL_STYLES.length - 1)];
 
-  // build iris content (either rings or stroke spirals)
+  // 5) precompute stroke widths like buildSpiralStrokes would, so we can budget radius
+  //    (mirror the ranges in buildSpiralStrokes)
+  const wB_tmp = round(R(6.0, 8.0), 2);
+  const strokeBudget = wB_tmp * 0.5 + 0.75; // half of widest stroke + small cushion
+
+  // 6) final usable radius
+  const maxR  = Math.max(0, maxRGeo - strokeBudget);
+  const lensR = round(maxR * 1.10, 2); // for glow only; it's clipped anyway
+
+  // 7) defs with lens clip
+  const { defs, idGlow, idGloss, idClip } = buildDefs({ cx, cy, lensR, bright, lensPath });
+
+  // 8) build iris content with the final maxR
   const iris =
     style === "rings"
       ? buildRings({ cx, cy, maxR, colorA: darkA, colorB: darkB })
       : buildSpiralStrokes({ cx, cy, maxR, colorA: darkA, colorB: darkB, style });
 
   const gloss = buildGloss({ idGloss, cx, cy });
-  const maskId = uid("mask");
 
+  // 9) render with clipPath applied to the group that contains glow + iris + gloss
   const svg = `
     <svg xmlns="${SVG_NS}" width="${SIZE}" height="${SIZE}" viewBox="${viewBox}">
       ${defs}
 
       <!-- Frame uses the bright color from the palette -->
-      <path d="${jsonData.frames.pathData}" fill="${bright}" opacity="1"/>
+      <path d="${framePath}" fill="${bright}" opacity="1"/>
 
-      <!-- Lens base + iris, clipped to eye -->
-      <mask id="${maskId}">
-        <path d="${jsonData.eyes.pathData}" fill="#fff"/>
-      </mask>
-      <g mask="url(#${maskId})">
+      <!-- Lens base + iris, clipped to LENS -->
+      <g clip-path="url(#${idClip})">
         <rect x="0" y="0" width="100%" height="100%" fill="url(#${idGlow})"/>
         ${iris}
         ${gloss}
       </g>
 
-      <!-- Eye outline on top for crisp edge -->
-      <path d="${jsonData.eyes.pathData}" fill="none" stroke="${bright}" stroke-width="1.2" opacity="0.9"/>
+      <!-- Lens outline on top for crisp edge -->
+      <path d="${lensPath}" fill="none" stroke="${bright}" stroke-width="1.2" opacity="0.9"/>
     </svg>
   `.replace(/\s*\n\s*/g, " ").trim();
 

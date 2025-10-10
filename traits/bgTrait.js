@@ -13,6 +13,7 @@ const R  = (min, max) => min + getSecureRandomNumber() * (max - min);
 const RI = (min, max) => Math.floor(R(min, max + 1));
 const round = (n, d = 1) => Number(n.toFixed(d));
 const pick  = (arr) => arr[RI(0, arr.length - 1)];
+const lerp = (a, b, t) => a + (b - a) * t;
 function shuffle(arr){
   for (let i = arr.length - 1; i > 0; i--) {
     const j = Math.floor(getSecureRandomNumber() * (i + 1));
@@ -252,11 +253,41 @@ export function generateTrait() {
   }
   arms += `</g>`;
 
-  // simple core glow approximation: a few faint concentric circles (no gradient/filter)
+  // adaptive core glow: mono (old look) OR stacked layers of the same hue
   const coreR = Math.round(R(69, 79));
+
+  // 50/50 mono vs stacked; tweak weights if you want more/less layering
+  const coreMode = getSecureRandomNumber() < 0.5 ? "mono" : "stacked";
+
+  // 3–5 layers when stacked; 1 when mono
+  const layers = (coreMode === "mono") ? 1 : RI(3, 5);
+
+  // two shade schemes for stacked: outer lighter → inner darker (soft) or inverted
+  const scheme = (coreMode === "mono")
+    ? "mono"
+    : (getSecureRandomNumber() < 0.5 ? "soft" : "inverted");
+
   let coreGlow = `<g>`;
-  for (const [mult, op] of [[1,0.18],[0.68,0.28],[0.38,0.42]]) {
-    coreGlow += `<circle cx="${WIDTH/2}" cy="${HEIGHT/2}" r="${Math.round(coreR*mult)}" fill="${core}" opacity="${op}"/>`;
+  for (let i = 0; i < layers; i++) {
+    const t = (layers === 1) ? 0 : i / (layers - 1);
+
+    // Smooth, non-choppy sizes (larger → smaller). You can tune endpoints.
+    const r = Math.round(coreR * lerp(1.0, 0.32, t));
+
+    // Smooth opacity ramp (outer faint → inner stronger)
+    // If mono, bump a bit so a single circle reads like the “old” core.
+    const baseOpacity = lerp(0.18, 0.42, 1 - t);
+    const o = round(coreMode === "mono" ? Math.min(0.5, baseOpacity + 0.1) : baseOpacity, 2);
+
+    // Same hue, different lightness. Positive = lighter, negative = darker.
+    let amt = 0.0;
+    if (scheme === "soft")      amt = lerp(+0.20, -0.12, t); // lighter outside → darker inside
+    else if (scheme === "inverted") amt = lerp(-0.12, +0.20, t); // darker outside → lighter inside
+    // mono keeps amt = 0 (exact base color)
+
+    const col = tint(core, amt);
+
+    coreGlow += `<circle cx="${WIDTH/2}" cy="${HEIGHT/2}" r="${r}" fill="${col}" opacity="${o}"/>`;
   }
   coreGlow += `</g>`;
 

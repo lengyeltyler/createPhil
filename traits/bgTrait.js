@@ -14,6 +14,9 @@ const RI = (min, max) => Math.floor(R(min, max + 1));
 const round = (n, d = 1) => Number(n.toFixed(d));
 const pick  = (arr) => arr[RI(0, arr.length - 1)];
 const lerp = (a, b, t) => a + (b - a) * t;
+const clamp = (x, a=0, b=1) => Math.min(b, Math.max(a, x));
+const smoother = (t) => t*t*(3 - 2*t);
+const easeExpOut = (t) => 1 - Math.pow(2, -10 * t);
 function shuffle(arr){
   for (let i = arr.length - 1; i > 0; i--) {
     const j = Math.floor(getSecureRandomNumber() * (i + 1));
@@ -253,43 +256,46 @@ export function generateTrait() {
   }
   arms += `</g>`;
 
-  // adaptive core glow: mono (old look) OR stacked layers of the same hue
-  const coreR = Math.round(R(26, 39));
+const coreR = Math.round(R(34, 40)); // your halved size (or your multi-scale choice)
 
-  // 50/50 mono vs stacked; tweak weights if you want more/less layering
-  const coreMode = getSecureRandomNumber() < 0.5 ? "mono" : "stacked";
+// ... keep coreMode as you have it ...
+const coreMode = getSecureRandomNumber() < 0.5 ? "mono" : "stacked";
 
-  // 3–5 layers when stacked; 1 when mono
-  const layers = (coreMode === "mono") ? 1 : RI(3, 5);
+// If stacked, use more/lighter layers for smoothness
+const layers = (coreMode === "mono") ? 1 : RI(6, 9); // was 3–5
 
-  // two shade schemes for stacked: outer lighter → inner darker (soft) or inverted
-  const scheme = (coreMode === "mono")
-    ? "mono"
-    : (getSecureRandomNumber() < 0.5 ? "soft" : "inverted");
+const scheme = (coreMode === "mono")
+  ? "mono"
+  : (getSecureRandomNumber() < 0.5 ? "soft" : "inverted");
 
-  let coreGlow = `<g>`;
-  for (let i = 0; i < layers; i++) {
-    const t = (layers === 1) ? 0 : i / (layers - 1);
+let coreGlow = `<g>`;
+for (let i = 0; i < layers; i++) {
+  // normalized layer position 0..1 (outer→inner)
+  const tRaw = (layers === 1) ? 0 : i / (layers - 1);
 
-    // Smooth, non-choppy sizes (larger → smaller). You can tune endpoints.
-    const r = Math.round(coreR * lerp(1.0, 0.32, t));
+  // Use smootherstep so spacing is denser near edges (more overlap)
+  const t = smoother(tRaw);
 
-    // Smooth opacity ramp (outer faint → inner stronger)
-    // If mono, bump a bit so a single circle reads like the “old” core.
-    const baseOpacity = lerp(0.18, 0.42, 1 - t);
-    const o = round(coreMode === "mono" ? Math.min(0.5, baseOpacity + 0.1) : baseOpacity, 2);
+  // ---- Radius curve ----
+  // Heavier overlap: shrink more slowly at first, faster at the end
+  // r goes from 100% down to ~28% with an exponential feel
+  const r = Math.round(coreR * (0.28 + 0.72 * (1 - easeExpOut(t))));
 
-    // Same hue, different lightness. Positive = lighter, negative = darker.
-    let amt = 0.0;
-    if (scheme === "soft")      amt = lerp(+0.20, -0.12, t); // lighter outside → darker inside
-    else if (scheme === "inverted") amt = lerp(-0.12, +0.20, t); // darker outside → lighter inside
-    // mono keeps amt = 0 (exact base color)
+  // ---- Opacity ramp ----
+  // Outer very faint, inner stronger, kept subtle to avoid banding
+  const baseOpacity = 0.06 + 0.36 * smoother(1 - t);
+  const o = round(coreMode === "mono" ? Math.min(0.5, baseOpacity + 0.1) : baseOpacity, 3);
 
-    const col = tint(core, amt);
+  // ---- Same-hue lightness tweaks (VERY gentle steps) ----
+  // Smaller deltas = less visible seams
+  let amt = 0.0;
+  if (scheme === "soft")      amt = lerp(+0.12, -0.08, t);       // lighter → darker
+  else if (scheme === "inverted") amt = lerp(-0.08, +0.12, t);   // darker → lighter
+  const col = tint(core, amt);
 
-    coreGlow += `<circle cx="${WIDTH/2}" cy="${HEIGHT/2}" r="${r}" fill="${col}" opacity="${o}"/>`;
-  }
-  coreGlow += `</g>`;
+  coreGlow += `<circle cx="${WIDTH/2}" cy="${HEIGHT/2}" r="${r}" fill="${col}" opacity="${o}"/>`;
+}
+coreGlow += `</g>`;
 
   const svg =
 `<svg xmlns="${SVG_NS}" width="${WIDTH}" height="${HEIGHT}" viewBox="0 0 ${WIDTH} ${HEIGHT}">

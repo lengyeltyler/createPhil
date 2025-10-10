@@ -330,25 +330,31 @@ function buildSpiralStrokes({ cx, cy, maxR, colorA, colorB, style, lensPath, vie
 }
 
 // Lens glow gradient tinted by the bright frame color
-function buildDefs({ cx, cy, lensR, bright }) {
+function buildDefs({ cx, cy, lensR, bright, lensPath }) {
   const idGlow  = uid("glow");
   const idGloss = uid("gloss");
+  const idClip  = uid("clip");
   const defs = `
     <defs>
       <radialGradient id="${idGlow}" gradientUnits="userSpaceOnUse" cx="${cx}" cy="${cy}" r="${lensR}">
-        <stop offset="0"   stop-color="#ffffff" stop-opacity="0.65"/>
+        <stop offset="0" stop-color="#ffffff" stop-opacity="0.65"/>
         <stop offset="0.55" stop-color="${bright}" stop-opacity="0.35"/>
-        <stop offset="1"   stop-color="${bright}" stop-opacity="0"/>
+        <stop offset="1" stop-color="${bright}" stop-opacity="0"/>
       </radialGradient>
 
       <radialGradient id="${idGloss}" cx="50%" cy="50%" r="50%">
         <stop offset="0%" stop-color="#ffffff" stop-opacity="0.9"/>
         <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
       </radialGradient>
+
+      <!-- hard clip to the lens shape -->
+      <clipPath id="${idClip}" clipPathUnits="userSpaceOnUse">
+        <path d="${lensPath}"/>
+      </clipPath>
     </defs>
   `.replace(/\s*\n\s*/g, " ").trim();
 
-  return { defs, idGlow, idGloss };
+  return { defs, idGlow, idGloss, idClip };
 }
 
 function buildGloss({ idGloss, cx, cy }) {
@@ -376,8 +382,7 @@ export async function generateTrait(jsonData) {
   }
 
   const viewBox  = jsonData.eyes.viewBox || `0 0 ${SIZE} ${SIZE}`;
-  const lensPath = jsonData.eyes.pathData;   // treat eyes.pathData as the lens boundary
-
+  const lensPath = jsonData.eyes.pathData;
   const { cx, cy } = pickCenterInside(lensPath, viewBox);
 
   // pick palette -> [bright, darkA, darkB]
@@ -387,8 +392,7 @@ export async function generateTrait(jsonData) {
   const maxR  = Math.min(SIZE, SIZE) * R(0.27, 0.33);
   const lensR = round(maxR * R(1.05, 1.25), 2);
 
-  const { defs, idGlow, idGloss } = buildDefs({ cx, cy, lensR, bright });
-
+  const { defs, idGlow, idGloss, idClip } = buildDefs({ cx, cy, lensR, bright, lensPath });
   // choose spiral style
   const style = SPIRAL_STYLES[RI(0, SPIRAL_STYLES.length - 1)];
 

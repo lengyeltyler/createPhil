@@ -43,45 +43,6 @@ function pickCenterInside(pathData, viewBox) {
   return { cx: minX + w/2, cy: minY + h/2 };
 }
 
-function maxRadiusInsidePath(pathData, cx, cy, viewBox = `0 0 ${SIZE} ${SIZE}`, {
-  samples = 128,         // angular samples around the center
-  tol = 0.5,             // px precision for the boundary
-  margin = 0             // safety margin to shrink a bit
-} = {}) {
-  const [minX, minY, w, h] = viewBox.split(" ").map(Number);
-  const diag = Math.hypot(w, h);
-  const isInside = (x, y) => isPointInPathRasterized(pathData, x, y, viewBox);
-
-  // Ensure center is inside; if not, caller should pick another center
-  if (!isInside(cx, cy)) return 0;
-
-  let minR = Infinity;
-  for (let i = 0; i < samples; i++) {
-    const theta = (i / samples) * 2 * Math.PI;
-    // Binary search along this ray for the last "inside" point
-    let lo = 0, hi = diag;         // hi big enough to cross boundary
-    // If starting 'hi' is inside, push it out until it's outside
-    if (isInside(cx + Math.cos(theta) * hi, cy + Math.sin(theta) * hi)) {
-      // Expand hi until outside or until cap
-      let step = hi;
-      for (let k = 0; k < 8; k++) { // a few expansions
-        step *= 2;
-        if (!isInside(cx + Math.cos(theta) * step, cy + Math.sin(theta) * step)) { hi = step; break; }
-      }
-    }
-    // Now binary-search boundary crossing
-    for (let it = 0; it < 24; it++) {
-      const mid = (lo + hi) / 2;
-      const x = cx + Math.cos(theta) * mid;
-      const y = cy + Math.sin(theta) * mid;
-      if (isInside(x, y)) lo = mid; else hi = mid;
-      if (hi - lo <= tol) break;
-    }
-    minR = Math.min(minR, lo);
-  }
-  return Math.max(0, minR - margin);
-}
-
 async function fetchJSON(url) {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Failed to fetch ${url}`);
@@ -102,7 +63,7 @@ const PALETTES = [
   ["#463730", "#1F5673", "#759FBC"],
   ["#FFBC42", "#D81159", "#8F2D56"],
   ["#F1DAC4", "#A69CAC", "#474973"],
-  ["#C4BBB8", "#F5B0CB", "#DC6ACF"],   
+  ["#C4BBB8", "#F5B0CB", "#DC6ACF"],
 ];
 
 // ---------- spiral styles ----------
@@ -120,22 +81,78 @@ function toPath(points) {
   return d;
 }
 
+// --- NEW: polyline clip to path (delete outside segments) -------------------
+function clipPolylineToPath(pathData, points, viewBox = `0 0 ${SIZE} ${SIZE}`, tol = 0.5) {
+  if (!points || points.length < 2) return [];
+  const isInside = (x, y) => isPointInPathRasterized(pathData, x, y, viewBox);
+
+  const segs = [];
+  let cur = [];
+
+  const bisectToBoundary = (ax, ay, bx, by) => {
+    // A and B straddle the boundary. Find boundary point from A->B.
+    let lo = 0, hi = 1;
+    for (let i = 0; i < 24; i++) {
+      const mid = (lo + hi) / 2;
+      const mx = ax + (bx - ax) * mid;
+      const my = ay + (by - ay) * mid;
+      if (isInside(mx, my)) lo = mid; else hi = mid;
+      if ((hi - lo) * Math.hypot(bx - ax, by - ay) <= tol) break;
+    }
+    const t = lo;
+    return { x: ax + (bx - ax) * t, y: ay + (by - ay) * t };
+  };
+
+  let prev = points[0];
+  let prevIn = isInside(prev.x, prev.y);
+  if (prevIn) cur.push(prev);
+
+  for (let i = 1; i < points.length; i++) {
+    const p = points[i];
+    const nowIn = isInside(p.x, p.y);
+
+    if (prevIn && nowIn) {
+      if (cur.length === 0) cur.push(prev);
+      cur.push(p);
+    } else if (prevIn && !nowIn) {
+      const cut = bisectToBoundary(prev.x, prev.y, p.x, p.y);
+      if (cur.length === 0) cur.push(prev);
+      cur.push(cut);
+      if (cur.length >= 2) segs.push(cur);
+      cur = [];
+    } else if (!prevIn && nowIn) {
+      const cut = bisectToBoundary(p.x, p.y, prev.x, prev.y); // reverse to find boundary from inside side
+      cur = [cut, p];
+    } else {
+      // both outside -> skip
+    }
+
+    prev = p;
+    prevIn = nowIn;
+  }
+  if (cur.length >= 2) segs.push(cur);
+
+  return segs;
+}
+
+function segmentToPathD(seg) {
+  let d = `M ${round(seg[0].x,2)} ${round(seg[0].y,2)}`;
+  for (let i = 1; i < seg.length; i++) d += ` L ${round(seg[i].x,2)} ${round(seg[i].y,2)}`;
+  return d;
+}
+// ---------------------------------------------------------------------------
+
 // Generate spiral points around (cx,cy)
 function genSpiralPoints({ type, cx, cy, maxR, turns = 3.2, steps = 420 }) {
   const pts = [];
   const twoPiT = turns * 2 * Math.PI;
 
-  // helpers for trochoids
-  const normAndPush = (x, y, t) => {
-    // center already around (cx,cy); scale handled per-case
-    pts.push({ x, y, t });
-  };
+  const normAndPush = (x, y, t) => { pts.push({ x, y, t }); };
 
   for (let i = 0; i < steps; i++) {
     const t = i / (steps - 1 || 1);
     const theta = t * twoPiT;
 
-    // Defaults for legacy styles
     let r, x, y;
 
     switch (type) {
@@ -179,11 +196,10 @@ function genSpiralPoints({ type, cx, cy, maxR, turns = 3.2, steps = 420 }) {
         x = cx + Math.cos(theta)*r; y = cy + Math.sin(theta)*r; break;
       }
 
-      // ---------- NEW compact / complex ----------
+      // additional types supported but not selected unless added to SPIRAL_STYLES
       case "spiro_epitro": {
-        // Epitrochoid: R, r, d scaled to stay compact
         const Rb = maxR * 0.28 * (1 + 0.2 * getSecureRandomNumber());
-        const rb = Rb * (0.30 + 0.25 * getSecureRandomNumber()); // small gear
+        const rb = Rb * (0.30 + 0.25 * getSecureRandomNumber());
         const d  = rb * (0.8 + 0.6 * getSecureRandomNumber());
         const k  = (Rb + rb) / rb;
         const xx = (Rb + rb) * Math.cos(theta) - d * Math.cos(k * theta);
@@ -192,7 +208,6 @@ function genSpiralPoints({ type, cx, cy, maxR, turns = 3.2, steps = 420 }) {
         break;
       }
       case "spiro_hypo": {
-        // Hypotrochoid (inside). Denser near center.
         const Rb = maxR * 0.32 * (1 + 0.2 * getSecureRandomNumber());
         const rb = Rb * (0.32 + 0.25 * getSecureRandomNumber());
         const d  = rb * (0.7 + 0.5 * getSecureRandomNumber());
@@ -203,7 +218,6 @@ function genSpiralPoints({ type, cx, cy, maxR, turns = 3.2, steps = 420 }) {
         break;
       }
       case "involute": {
-        // Involute of a circle (scaled to ~0.8 maxR)
         const a = maxR * 0.18;
         const th = t * (twoPiT * 0.9);
         const xx = a * (Math.cos(th) + th * Math.sin(th));
@@ -212,40 +226,39 @@ function genSpiralPoints({ type, cx, cy, maxR, turns = 3.2, steps = 420 }) {
         break;
       }
       case "lissajous_polar": {
-        // Dense lobes via radial modulation
-        const n = 6 + Math.floor(getSecureRandomNumber() * 5);   // 6–10 lobes
-        const m = 3 + Math.floor(getSecureRandomNumber() * 3);   // frequency mix
+        const n = 6 + Math.floor(getSecureRandomNumber() * 5);
+        const m = 3 + Math.floor(getSecureRandomNumber() * 3);
         const mod = 0.45 + 0.40 * Math.sin(n * theta + m * 0.7);
         r = maxR * 0.82 * t * (0.65 + 0.35 * mod);
         x = cx + Math.cos(theta)*r; y = cy + Math.sin(theta)*r; break;
       }
       case "bundle": {
-        // Single path here (phase 0). Two extra phases drawn in the stroke builder.
         const base = t * maxR * 0.85;
         const wob  = 0.12 * Math.sin(7.0 * theta) + 0.08 * Math.cos(11.0 * theta);
         r = base * (1 + wob);
         x = cx + Math.cos(theta)*r; y = cy + Math.sin(theta)*r; break;
       }
 
-      // fallback (rings-esque)
       default: {
         r = t * maxR; x = cx + Math.cos(theta)*r; y = cy + Math.sin(theta)*r; break;
       }
     }
-
     normAndPush(x, y, t);
   }
   return pts;
 }
 
 // Concentric ellipse "rings" (alternating the two dark colors)
+// Slight inward buffer to avoid brushing the lens edge.
 function buildRings({ cx, cy, maxR, colorA, colorB }) {
   const count = RI(54, 72);
   const baseW = R(1.2, 1.9);
+  const buffer = 0.6; // px inward safety
   let g = `<g id="iris-rings" fill="none">`;
   for (let i = 0; i < count; i++) {
     const t = i / (count - 1 || 1);
-    const r = (0.06 + 0.94 * t) * maxR + R(-0.25, 0.25);
+    const rBase = (0.06 + 0.94 * t) * maxR + R(-0.25, 0.25);
+    const r = Math.max(0, Math.min(rBase, maxR - buffer));
     const rx = round(r * (1 + R(-0.015, 0.015)), 3);
     const ry = round(r * (1 + R(-0.015, 0.015)), 3);
     const rot = round(R(-8, 8), 2);
@@ -258,16 +271,21 @@ function buildRings({ cx, cy, maxR, colorA, colorB }) {
   return g;
 }
 
-// Spiral strokes (two passes, A on top of B)
-function buildSpiralStrokes({ cx, cy, maxR, colorA, colorB, style }) {
+// Spiral strokes (two passes, A on top of B), trimmed to lens path via polyline clipping
+function buildSpiralStrokes({ cx, cy, maxR, colorA, colorB, style, lensPath, viewBox = `0 0 ${SIZE} ${SIZE}` }) {
   const steps = 540;                 // a bit denser for compact styles
   const turns = (style === "involute") ? 2.2 : 3.2;
 
-  // primary
+  // primary polyline
   const pts0 = genSpiralPoints({ type: style, cx, cy, maxR, turns, steps });
-  const d0 = toPath(pts0);
 
-  // base widths/opacity
+  // clip the polyline to the lens shape into inside-only segments
+  const segments = clipPolylineToPath(lensPath, pts0, viewBox, 0.5);
+  if (segments.length === 0) {
+    return `<g id="iris-spiral" fill="none"></g>`;
+  }
+
+  // base widths/opacity (same look you had)
   const wB = round(R(6.0, 8.0), 2);
   const wA = round(wB * R(0.45, 0.62), 2);
   const opB = round(R(0.28, 0.42), 2);
@@ -276,31 +294,35 @@ function buildSpiralStrokes({ cx, cy, maxR, colorA, colorB, style }) {
   const dashB = `${round(R(9, 16),1)} ${round(R(6, 12),1)}`;
   const dashA = `${round(R(6, 11),1)} ${round(R(5, 10),1)}`;
 
-  // default 2-layer stroke
-  let out = `
-    <g id="iris-spiral" fill="none">
-      <path d="${d0}" stroke="${colorB}" stroke-width="${wB}" opacity="${opB}" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="${dashB}"/>
-      <path d="${d0}" stroke="${colorA}" stroke-width="${wA}" opacity="${opA}" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="${dashA}"/>
-  `;
+  let out = `<g id="iris-spiral" fill="none">`;
 
-  // EXTRA: for 'bundle', add two phase-shifted tight spirals for a compact “vortex”
-  if (style === "bundle") {
-    const mkPhase = (phase) => {
-      const pts = pts0.map((p, i) => {
-        const th = (i / (pts0.length - 1 || 1)) * turns * 2 * Math.PI + phase;
-        const wob = 0.11 * Math.sin(7.0 * th) + 0.08 * Math.cos(11.0 * th);
-        const r = (i / (pts0.length - 1 || 1)) * maxR * 0.82 * (1 + wob);
-        return { x: cx + Math.cos(th) * r, y: cy + Math.sin(th) * r };
-      });
-      return toPath(pts);
-    };
-    const d1 = mkPhase( 0.35);
-    const d2 = mkPhase(-0.35);
-    const wSub = round(wA * 0.8, 2);
+  // draw each kept segment twice (B under A), preserving visual style
+  for (const seg of segments) {
+    const d = segmentToPathD(seg);
     out += `
-      <path d="${d1}" stroke="${colorA}" stroke-width="${wSub}" opacity="${opA}" stroke-linecap="round" stroke-linejoin="round"/>
-      <path d="${d2}" stroke="${colorB}" stroke-width="${wSub}" opacity="${opA}" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="${d}" stroke="${colorB}" stroke-width="${wB}" opacity="${opB}" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="${dashB}"/>
+      <path d="${d}" stroke="${colorA}" stroke-width="${wA}" opacity="${opA}" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="${dashA}"/>
     `;
+  }
+
+  // Optional: extra phases for 'bundle', also clipped
+  if (style === "bundle") {
+    const mkPhasePts = (phase) => pts0.map((p, i) => {
+      const t = i / (pts0.length - 1 || 1);
+      const th = t * turns * 2 * Math.PI + phase;
+      const wob = 0.11 * Math.sin(7.0 * th) + 0.08 * Math.cos(11.0 * th);
+      const r = t * maxR * 0.82 * (1 + wob);
+      return { x: cx + Math.cos(th) * r, y: cy + Math.sin(th) * r };
+    });
+
+    for (const phase of [0.35, -0.35]) {
+      const segs = clipPolylineToPath(lensPath, mkPhasePts(phase), viewBox, 0.5);
+      const wSub = round(wA * 0.8, 2);
+      for (const seg of segs) {
+        const d = segmentToPathD(seg);
+        out += `<path d="${d}" stroke="${colorA}" stroke-width="${wSub}" opacity="${opA}" stroke-linecap="round" stroke-linejoin="round"/>`;
+      }
+    }
   }
 
   out += `</g>`;
@@ -308,10 +330,9 @@ function buildSpiralStrokes({ cx, cy, maxR, colorA, colorB, style }) {
 }
 
 // Lens glow gradient tinted by the bright frame color
-function buildDefs({ cx, cy, lensR, bright, lensPath }) {
+function buildDefs({ cx, cy, lensR, bright }) {
   const idGlow  = uid("glow");
   const idGloss = uid("gloss");
-  const idClip  = uid("clip");
   const defs = `
     <defs>
       <radialGradient id="${idGlow}" gradientUnits="userSpaceOnUse" cx="${cx}" cy="${cy}" r="${lensR}">
@@ -324,14 +345,10 @@ function buildDefs({ cx, cy, lensR, bright, lensPath }) {
         <stop offset="0%" stop-color="#ffffff" stop-opacity="0.9"/>
         <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
       </radialGradient>
-
-      <clipPath id="${idClip}" clipPathUnits="userSpaceOnUse">
-        <path d="${lensPath}"/>
-      </clipPath>
     </defs>
   `.replace(/\s*\n\s*/g, " ").trim();
 
-  return { defs, idGlow, idGloss, idClip };
+  return { defs, idGlow, idGloss };
 }
 
 function buildGloss({ idGloss, cx, cy }) {
@@ -348,65 +365,57 @@ export async function generateTrait(jsonData) {
   if (!jsonData) {
     const base = "/traits_json";
     const [eyesData, frameData] = await Promise.all([
-      fetchJSON(`${base}/eyesOutline.json`),   // should be the LENS path
+      fetchJSON(`${base}/eyesOutline.json`),
       fetchJSON(`${base}/frameOutline.json`),
     ]);
     jsonData = { eyes: eyesData, frames: frameData };
   }
 
-  // If you have a separate lens path json, prefer it here:
-  const lensPath = jsonData?.eyes?.pathData;   // rename for clarity
-  const framePath = jsonData?.frames?.pathData;
-
-  if (!lensPath || !framePath) {
-    throw new Error("Eyes trait requires lens (eyes.pathData) and frames.pathData.");
+  if (!jsonData?.eyes?.pathData || !jsonData?.frames?.pathData) {
+    throw new Error("Eyes trait requires eyes.pathData and frames.pathData.");
   }
 
-  const viewBox = jsonData.eyes.viewBox || `0 0 ${SIZE} ${SIZE}`;
+  const viewBox  = jsonData.eyes.viewBox || `0 0 ${SIZE} ${SIZE}`;
+  const lensPath = jsonData.eyes.pathData;   // treat eyes.pathData as the lens boundary
 
-  // 1) pick a center INSIDE the lens
   const { cx, cy } = pickCenterInside(lensPath, viewBox);
 
-  // 2) palette
+  // pick palette -> [bright, darkA, darkB]
   const [bright, darkA, darkB] = PALETTES[RI(0, PALETTES.length - 1)];
 
-  // 3) compute geometric maxR that truly fits inside lens (raw, before stroke)
-  //    Use a tiny margin to counter AA at the boundary.
-  const maxRGeo = maxRadiusInsidePath(lensPath, cx, cy, viewBox, { samples: 144, tol: 0.5, margin: 1.0 });
+  // keep your original sizing to preserve look
+  const maxR  = Math.min(SIZE, SIZE) * R(0.27, 0.33);
+  const lensR = round(maxR * R(1.05, 1.25), 2);
 
-  // 4) choose style now (needed to size strokes)
+  const { defs, idGlow, idGloss } = buildDefs({ cx, cy, lensR, bright });
+
+  // choose spiral style
   const style = SPIRAL_STYLES[RI(0, SPIRAL_STYLES.length - 1)];
 
-  // 5) precompute stroke widths like buildSpiralStrokes would, so we can budget radius
-  //    (mirror the ranges in buildSpiralStrokes)
-  const wB_tmp = round(R(6.0, 8.0), 2);
-  const strokeBudget = wB_tmp * 0.5 + 0.75; // half of widest stroke + small cushion
-
-  // 6) final usable radius
-  const maxR  = Math.max(0, maxRGeo - strokeBudget);
-  const lensR = round(maxR * 1.10, 2); // for glow only; it's clipped anyway
-
-  // 7) defs with lens clip
-  const { defs, idGlow, idGloss, idClip } = buildDefs({ cx, cy, lensR, bright, lensPath });
-
-  // 8) build iris content with the final maxR
+  // build iris content (either rings or stroke spirals)
   const iris =
     style === "rings"
       ? buildRings({ cx, cy, maxR, colorA: darkA, colorB: darkB })
-      : buildSpiralStrokes({ cx, cy, maxR, colorA: darkA, colorB: darkB, style });
+      : buildSpiralStrokes({ cx, cy, maxR, colorA: darkA, colorB: darkB, style, lensPath, viewBox });
 
   const gloss = buildGloss({ idGloss, cx, cy });
 
-  // 9) render with clipPath applied to the group that contains glow + iris + gloss
+  // Keep your existing mask block if you like the glow confined.
+  // (Spiral is hard-trimmed already, so even if mask is flaky in some editors, the iris won't bleed.)
+  const maskId = uid("mask");
+
   const svg = `
     <svg xmlns="${SVG_NS}" width="${SIZE}" height="${SIZE}" viewBox="${viewBox}">
       ${defs}
 
       <!-- Frame uses the bright color from the palette -->
-      <path d="${framePath}" fill="${bright}" opacity="1"/>
+      <path d="${jsonData.frames.pathData}" fill="${bright}" opacity="1"/>
 
-      <!-- Lens base + iris, clipped to LENS -->
-      <g clip-path="url(#${idClip})">
+      <!-- Lens base + iris; mask is optional safety for glow -->
+      <mask id="${maskId}">
+        <path d="${lensPath}" fill="#fff"/>
+      </mask>
+      <g mask="url(#${maskId})">
         <rect x="0" y="0" width="100%" height="100%" fill="url(#${idGlow})"/>
         ${iris}
         ${gloss}
